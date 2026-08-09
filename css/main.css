@@ -1,0 +1,125 @@
+/* =====================================================================
+ * main.css — 版面與像素縮放
+ * =====================================================================
+ * 關鍵設計：畫面分成兩層畫布。
+ *   #stage  像素層，尺寸就是地圖原始像素（預設 960x512），
+ *           用 CSS transform 放大「整數」倍，配合 image-rendering: pixelated，
+ *           像素邊緣才會銳利。小數倍率會糊。
+ *   #labels UI 層，尺寸等於放大後的螢幕像素，中文字直接以原生解析度繪製，
+ *           投影到教室後排才看得清楚。
+ * ===================================================================== */
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #1b1720;
+  color: #efe9f2;
+  font-family: "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", system-ui, sans-serif;
+  overflow: hidden;
+}
+
+#app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ---------------- 工具列 ---------------- */
+
+#toolbar {
+  flex: 0 0 auto;
+  width: 100%;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 20px;
+  background: #241f2b;
+  border-bottom: 1px solid #352f3e;
+}
+
+#title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.muted {
+  color: #9a90a6;
+  font-size: 14px;
+}
+
+/* ---------------- 畫布 ---------------- */
+
+#stage-wrap {
+  flex: 1 1 auto;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 0;
+}
+
+#stage,
+#labels {
+  grid-area: 1 / 1;
+}
+
+#stage {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  /* 寬高由 JS 設定：內部解析度是地圖原始像素，CSS 尺寸是整數倍放大後的值 */
+}
+
+#labels {
+  pointer-events: none;
+}
+
+/* ---------------- 頁尾授權標示 ---------------- */
+
+/* 疊在畫面右下角，不佔版面高度 —— 每一個像素的垂直空間都要留給地圖，
+   否則放大倍率會從 2x 掉到 1x。授權標示仍然全程可見（這是使用條件）。 */
+#credits {
+  position: fixed;
+  right: 10px;
+  bottom: 6px;
+  font-size: 12px;
+  color: #8c8296;
+  background: rgba(27, 23, 32, 0.72);
+  padding: 3px 8px;
+  border-radius: 4px;
+  z-index: 10;
+}
+
+#credits a {
+  color: #a99cb8;
+  text-decoration: none;
+}
+
+#credits a:hover { text-decoration: underline; }
+
+/* ---------------- 錯誤橫幅 ---------------- */
+
+#banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 14px 20px;
+  background: #7a4a2e;
+  color: #ffeede;
+  font-size: 15px;
+  line-height: 1.6;
+  z-index: 50;
+  white-space: pre-wrap;
+}
+
+#banner[hidden] { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

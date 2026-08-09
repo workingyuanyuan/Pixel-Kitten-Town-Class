@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>班級像素小鎮</title>
+<link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+
+<div id="app">
+
+  <header id="toolbar">
+    <span id="title"></span>
+    <span id="status" class="muted"></span>
+  </header>
+
+  <!-- 雙層畫布：
+       #stage  像素層，原生地圖解析度，用 CSS 整數倍放大，image-rendering: pixelated
+       #labels UI 層，原生螢幕解析度，畫名字與進度條，字體才不會被放大糊掉 -->
+  <div id="stage-wrap">
+    <canvas id="stage"></canvas>
+    <canvas id="labels"></canvas>
+  </div>
+
+  <footer id="credits">
+    貓：<a href="https://ko-fi.com/s/8f4b62e7e2" target="_blank" rel="noopener">Cat 16x16 animation pack</a>　·
+    地圖：<a href="https://cainos.itch.io/pixel-art-top-down-basic" target="_blank" rel="noopener">Cainos — Pixel Art Top Down Basic</a>
+  </footer>
+
+</div>
+
+<div id="banner" hidden></div>
+
+<script src="js/config.js"></script>
+<script src="js/anims.js"></script>
+<script src="js/tileset.js"></script>
+<script src="js/assets.js"></script>
+<script src="js/map.js"></script>
+<script src="js/cats.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>貓咪圖輯與動畫檢視器 (Cat Spritesheet & Animation Viewer)</title>
+  <style>
+    /* -----------------------------------------------------------------
+     * 全局樣式與 CSS 變數定義 (Dark Pixel Theme)
+     * ----------------------------------------------------------------- */
+    :root {
+      --bg-dark: #121318;
+      --bg-card: #1c1e24;
+      --bg-card-hover: #262932;
+      --border-color: #2e3340;
+      --primary-color: #3b82f6;
+      --primary-hover: #2563eb;
+      --accent-color: #06b6d4;
+      --danger-color: #ef4444;
+      --danger-bg: rgba(239, 68, 68, 0.2);
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --font-mono: 'Fira Code', 'Consolas', 'Courier New', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* -----------------------------------------------------------------
+     * 頂部控制列 (Header Bar)
+     * ----------------------------------------------------------------- */
+    header {
+      background-color: var(--bg-card);
+      border-bottom: 1px solid var(--border-color);
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      z-index: 10;
+    }
+
+    .brand-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-main);
+    }
+
+    .brand-title span {
+      color: var(--accent-color);
+    }
+
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    label {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    select, button, input[type="number"] {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    select:focus, button:focus {
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+    }
+
+    select {
+      max-width: 320px;
+      cursor: pointer;
+    }
+
+    button {
+      cursor: pointer;
+      background-color: var(--primary-color);
+      border: none;
+      font-weight: 600;
+    }
+
+    button:hover {
+      background-color: var(--primary-hover);
+    }
+
+    .checkbox-label {
+      cursor: pointer;
+      user-select: none;
+      color: var(--text-main);
+    }
+
+    .checkbox-label input {
+      accent-color: var(--primary-color);
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
+
+    /* -----------------------------------------------------------------
+     * 主要工作區 (Main Layout)
+     * ----------------------------------------------------------------- */
+    main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* 左側主 Canvas 檢視區 */
+    .viewport {
+      flex: 1;
+      overflow: auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      position: relative;
+      /* 棋盤格背景以凸顯透明區域 */
+      background-color: #18191e;
+      background-image: 
+        linear-gradient(45deg, #22252e 25%, transparent 25%), 
+        linear-gradient(-45deg, #22252e 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #22252e 75%),
+        linear-gradient(-45deg, transparent 75%, #22252e 75%);
+      background-size: 32px 32px;
+      background-position: 0 0, 0 16px, 16px -16px, -16px 0px;
+    }
+
+    #mainCanvas {
+      display: block;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      border: 1px solid var(--border-color);
+      background-color: transparent;
+    }
+
+    /* 右側側邊欄（即時預覽與列索引清單） */
+    .sidebar {
+      width: 380px;
+      background-color: var(--bg-card);
+      border-left: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .panel-section {
+      padding: 16px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .section-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin-bottom: 12px;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* 即時預覽卡片 */
+    .preview-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      background-color: var(--bg-dark);
+      padding: 16px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+    }
+
+    #previewCanvas {
+      width: 128px;
+      height: 128px;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      background-color: rgba(255, 255, 255, 0.03);
+      border: 1px dashed var(--border-color);
+      border-radius: 6px;
+    }
+
+    .preview-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .preview-controls select {
+      flex: 1;
+      max-width: none;
+    }
+
+    .anim-stats {
+      width: 100%;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      text-align: center;
+      font-size: 0.8rem;
+    }
+
+    .stat-box {
+      background-color: rgba(255, 255, 255, 0.04);
+      padding: 6px 4px;
+      border-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .stat-label {
+      color: var(--text-muted);
+      font-size: 0.7rem;
+      margin-bottom: 2px;
+    }
+
+    .stat-value {
+      font-weight: 700;
+      color: var(--accent-color);
+      font-family: var(--font-mono);
+    }
+
+    .forbidden-warning {
+      background-color: var(--danger-bg);
+      border: 1px solid var(--danger-color);
+      color: #fca5a5;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      width: 100%;
+      display: none;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* 列表清單 */
+    .row-list-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+    }
+
+    .row-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      border-radius: 6px;
+      margin-bottom: 4px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      background-color: rgba(255, 255, 255, 0.02);
+      border: 1px solid transparent;
+      transition: all 0.15s ease;
+    }
+
+    .row-item:hover {
+      background-color: var(--bg-card-hover);
+      border-color: var(--border-color);
+    }
+
+    .row-item.selected {
+      border-color: var(--primary-color);
+      background-color: rgba(59, 130, 246, 0.15);
+    }
+
+    .row-item.forbidden {
+      background-color: rgba(239, 68, 68, 0.08);
+      border-color: rgba(239, 68, 68, 0.2);
+    }
+
+    .row-item.forbidden:hover {
+      background-color: rgba(239, 68, 68, 0.15);
+    }
+
+    .row-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .row-num {
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      min-width: 48px;
+    }
+
+    .row-name {
+      font-weight: 600;
+    }
+
+    .badge {
+      font-size: 0.7rem;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+
+    .badge-danger {
+      background-color: var(--danger-color);
+      color: white;
+    }
+
+    .badge-normal {
+      background-color: rgba(255, 255, 255, 0.1);
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 頂部控制欄 -->
+  <header>
+    <div class="brand-title">
+      🐱 <span>Spritesheet Viewer</span>
+      <span style="font-size: 0.8rem; font-weight: normal; color: var(--text-muted);">(素材格線與動畫檢視器)</span>
+    </div>
+
+    <div class="control-group">
+      <label>
+        素材檔：
+        <select id="assetSelect">
+          <!-- 由 JS 自動填入 CAT_SKINS 與 TILE_ASSETS -->
+        </select>
+      </label>
+
+      <label>
+        縮放倍率：
+        <select id="scaleSelect">
+          <option value="1">1x</option>
+          <option value="2" selected>2x (預設)</option>
+          <option value="3">3x</option>
+          <option value="4">4x</option>
+        </select>
+      </label>
+
+      <label class="checkbox-label">
+        <input type="checkbox" id="showGridCheck" checked>
+        顯示 32px 格線
+      </label>
+
+      <label class="checkbox-label">
+        <input type="checkbox" id="showLabelsCheck" checked>
+        顯示動作標籤
+      </label>
+    </div>
+  </header>
+
+  <!-- 主要工作區 -->
+  <main>
+    <!-- 左側主圖像與格線 Context -->
+    <div class="viewport" id="viewport">
+      <canvas id="mainCanvas"></canvas>
+    </div>
+
+    <!-- 右側側邊欄 (Live Preview & Row Inspector) -->
+    <div class="sidebar">
+      <div class="panel-section">
+        <div class="section-title">
+          🎬 即時動畫預覽 (Live Preview)
+        </div>
+
+        <div class="preview-card">
+          <canvas id="previewCanvas" width="128" height="128"></canvas>
+
+          <div class="preview-controls">
+            <select id="animSelect">
+              <!-- 由 JS 填入 CAT_ANIMS -->
+            </select>
+            <button id="playPauseBtn">⏸ 暫停</button>
+          </div>
+
+          <div class="anim-stats">
+            <div class="stat-box">
+              <div class="stat-label">列索引 (Row)</div>
+              <div class="stat-value" id="statRow">0</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">總格數 (Frames)</div>
+              <div class="stat-value" id="statFrames">6</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">速率 (FPS)</div>
+              <div class="stat-value" id="statFps">5</div>
+            </div>
+          </div>
+
+          <div class="forbidden-warning" id="forbiddenWarning">
+            ⚠️ 警告：此動作屬於【禁用清單】（睡覺 / 哈氣 / 昏倒 / 攻擊），安全機制禁止在遊戲中調用。
+          </div>
+        </div>
+      </div>
+
+      <!-- 貓咪動畫列索引對照清單 -->
+      <div class="panel-section" style="padding-bottom: 8px;">
+        <div class="section-title">
+          📋 動畫列對照表 (Rows Overview)
+          <span style="font-size: 0.75rem; font-weight: normal; color: var(--text-muted);" id="assetDims">352 x 1696</span>
+        </div>
+      </div>
+
+      <div class="row-list-container" id="rowList">
+        <!-- 由 JS 產生 53 列對照項目 -->
+      </div>
+    </div>
+  </main>
+
+  <!-- 載入專案公用腳本 -->
+  <script src="../js/config.js"></script>
+  <script src="../js/anims.js"></script>
+
+  <script>
+    /* =====================================================================
+     * spritesheet-viewer.html 介面邏輯腳本
+     * ===================================================================== */
+
+    // 全局控制變數
+    let currentImage = null;
+    let currentScale = 2;
+    let isPlaying = true;
+
+    // 即時預覽動畫狀態
+    let previewState = {
+      name: 'rest_1',
+      frame: 0,
+      elapsed: 0
+    };
+    let lastAnimTime = performance.now();
+
+    // DOM 元素引用
+    const assetSelect = document.getElementById('assetSelect');
+    const scaleSelect = document.getElementById('scaleSelect');
+    const showGridCheck = document.getElementById('showGridCheck');
+    const showLabelsCheck = document.getElementById('showLabelsCheck');
+    const mainCanvas = document.getElementById('mainCanvas');
+    const mainCtx = mainCanvas.getContext('2d');
+
+    const previewCanvas = document.getElementById('previewCanvas');
+    const previewCtx = previewCanvas.getContext('2d');
+    const animSelect = document.getElementById('animSelect');
+    const playPauseBtn = document.getElementById('playPauseBtn');
+    const statRow = document.getElementById('statRow');
+    const statFrames = document.getElementById('statFrames');
+    const statFps = document.getElementById('statFps');
+    const forbiddenWarning = document.getElementById('forbiddenWarning');
+    const rowList = document.getElementById('rowList');
+    const assetDims = document.getElementById('assetDims');
+
+    // 建立 row -> animInfo 快速對照 map
+    const rowToAnimMap = {};
+    if (typeof CAT_ANIMS !== 'undefined') {
+      for (const [name, info] of Object.entries(CAT_ANIMS)) {
+        const isForbidden = typeof FORBIDDEN_ANIMS !== 'undefined' && FORBIDDEN_ANIMS.has(name);
+        rowToAnimMap[info.row] = {
+          name: name,
+          row: info.row,
+          frames: info.frames,
+          fps: info.fps,
+          isForbidden: isForbidden
+        };
+      }
+    }
+
+    /**
+     * 初始化下拉選單選單項目
+     */
+    function initDropdowns() {
+      assetSelect.innerHTML = '';
+
+      // 1. 貓咪外觀素材 (CAT_SKINS)
+      if (typeof CAT_SKINS !== 'undefined' && Array.isArray(CAT_SKINS)) {
+        const catGroup = document.createElement('optgroup');
+        catGroup.label = '🐱 貓咪造型 (CAT_SKINS)';
+        CAT_SKINS.forEach((path, idx) => {
+          const opt = document.createElement('option');
+          opt.value = path;
+          opt.textContent = `[Cat ${idx + 1}] ${path.split('/').pop()}`;
+          catGroup.appendChild(opt);
+        });
+        assetSelect.appendChild(catGroup);
+      }
+
+      // 2. 地圖素材 (TILE_ASSETS)
+      if (typeof TILE_ASSETS !== 'undefined') {
+        const tileGroup = document.createElement('optgroup');
+        tileGroup.label = '🗺️ 地圖素材 (TILE_ASSETS)';
+        for (const [key, path] of Object.entries(TILE_ASSETS)) {
+          const opt = document.createElement('option');
+          opt.value = path;
+          opt.textContent = `[Tile: ${key}] ${path.split('/').pop()}`;
+          tileGroup.appendChild(opt);
+        }
+        assetSelect.appendChild(tileGroup);
+      }
+
+      // 3. 動畫選擇選單 (animSelect)
+      animSelect.innerHTML = '';
+      if (typeof CAT_ANIMS !== 'undefined') {
+        for (const [name, info] of Object.entries(CAT_ANIMS)) {
+          const opt = document.createElement('option');
+          opt.value = name;
+          const isForbidden = FORBIDDEN_ANIMS.has(name);
+          opt.textContent = `${isForbidden ? '⛔ ' : ''}Row ${info.row}: ${name} (${info.frames}f)`;
+          if (isForbidden) {
+            opt.style.color = '#ef4444';
+          }
+          animSelect.appendChild(opt);
+        }
+      }
+    }
+
+    /**
+     * 載入選取的圖片
+     */
+    function loadSelectedAsset() {
+      const path = assetSelect.value;
+      if (!path) return;
+
+      const img = new Image();
+      img.onload = () => {
+        currentImage = img;
+        assetDims.textContent = `${img.width} x ${img.height} px`;
+        renderMainCanvas();
+        renderRowList();
+      };
+      img.onerror = () => {
+        alert(`無法載入圖片：${path}`);
+      };
+      img.src = '../' + path; // 相對於 tools/ 目錄
+    }
+
+    /**
+     * 繪製主 Canvas（PNG + 格線 + 列/欄標籤 + 禁用標記）
+     */
+    function renderMainCanvas() {
+      if (!currentImage) return;
+
+      const scale = currentScale;
+      const w = currentImage.width;
+      const h = currentImage.height;
+      const cellSize = 32 * scale;
+      const cols = Math.floor(w / 32);
+      const rows = Math.floor(h / 32);
+
+      mainCanvas.width = w * scale;
+      mainCanvas.height = h * scale;
+
+      mainCtx.imageSmoothingEnabled = false;
+
+      // 1. 繪製 PNG 圖像（放大倍率）
+      mainCtx.drawImage(currentImage, 0, 0, w * scale, h * scale);
+
+      // 2. 判斷是否為貓咪 Spritesheet（可進行動畫列標註）
+      const isCatSheet = (w === 352 && h === 1696) || rows === 53;
+
+      // 3. 繪製禁用列的紅框背景 overlay
+      if (isCatSheet) {
+        for (let r = 0; r < rows; r++) {
+          const animInfo = rowToAnimMap[r];
+          if (animInfo && animInfo.isForbidden) {
+            mainCtx.fillStyle = 'rgba(239, 68, 68, 0.25)';
+            mainCtx.fillRect(0, r * cellSize, w * scale, cellSize);
+
+            // 繪製紅色的邊框線
+            mainCtx.strokeStyle = 'rgba(239, 68, 68, 0.6)';
+            mainCtx.lineWidth = 1;
+            mainCtx.strokeRect(0, r * cellSize, w * scale, cellSize);
+          }
+        }
+      }
+
+      // 4. 繪製 32px (縮放後) 格線
+      if (showGridCheck.checked) {
+        mainCtx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+        mainCtx.lineWidth = 1;
+
+        // 垂直線
+        for (let c = 0; c <= cols; c++) {
+          const x = c * cellSize;
+          mainCtx.beginPath();
+          mainCtx.moveTo(x, 0);
+          mainCtx.lineTo(x, h * scale);
+          mainCtx.stroke();
+        }
+
+        // 水平線
+        for (let r = 0; r <= rows; r++) {
+          const y = r * cellSize;
+          mainCtx.beginPath();
+          mainCtx.moveTo(0, y);
+          mainCtx.lineTo(w * scale, y);
+          mainCtx.stroke();
+        }
+      }
+
+      // 5. 繪製欄號 (Col numbers) 與列標籤 (Row Labels)
+      if (showLabelsCheck.checked) {
+        mainCtx.font = `bold ${Math.max(11, 10 * (scale / 2))}px monospace`;
+        mainCtx.textBaseline = 'middle';
+
+        // 頂部欄號 Header
+        for (let c = 0; c < cols; c++) {
+          const x = c * cellSize + 4;
+          const y = 10;
+          drawStrokedText(mainCtx, `C${c}`, x, y, '#06b6d4');
+        }
+
+        // 左側列標籤 Header
+        for (let r = 0; r < rows; r++) {
+          const y = r * cellSize + cellSize / 2;
+          const animInfo = rowToAnimMap[r];
+
+          let text = `R${r}`;
+          let color = '#ffffff';
+
+          if (isCatSheet && animInfo) {
+            text = `R${r}: ${animInfo.name} (${animInfo.frames}f)`;
+            if (animInfo.isForbidden) {
+              text = `⛔ R${r}: ${animInfo.name} [禁用]`;
+              color = '#f87171';
+            }
+          }
+
+          drawStrokedText(mainCtx, text, 8, y, color);
+        }
+      }
+    }
+
+    /**
+     * 繪製帶有黑色輪廓外線的文字，確保在任何圖形上都清晰可讀
+     */
+    function drawStrokedText(ctx, text, x, y, fillColor) {
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 3;
+      ctx.lineJoin = 'round';
+      ctx.strokeText(text, x, y);
+      ctx.fillStyle = fillColor;
+      ctx.fillText(text, x, y);
+    }
+
+    /**
+     * 渲染右側 53 列對照表
+     */
+    function renderRowList() {
+      rowList.innerHTML = '';
+      const totalRows = currentImage ? Math.floor(currentImage.height / 32) : 53;
+
+      for (let r = 0; r < totalRows; r++) {
+        const animInfo = rowToAnimMap[r];
+        const item = document.createElement('div');
+        item.className = 'row-item';
+
+        if (animInfo && animInfo.isForbidden) {
+          item.classList.add('forbidden');
+        }
+
+        if (previewState.name === (animInfo ? animInfo.name : '')) {
+          item.classList.add('selected');
+        }
+
+        const leftMeta = document.createElement('div');
+        leftMeta.className = 'row-meta';
+
+        const rowNum = document.createElement('span');
+        rowNum.className = 'row-num';
+        rowNum.textContent = `Row ${r.toString().padStart(2, '0')}`;
+
+        const rowName = document.createElement('span');
+        rowName.className = 'row-name';
+        rowName.textContent = animInfo ? animInfo.name : `Tile row ${r}`;
+
+        leftMeta.appendChild(rowNum);
+        leftMeta.appendChild(rowName);
+
+        const badge = document.createElement('span');
+        badge.className = 'badge';
+
+        if (animInfo) {
+          if (animInfo.isForbidden) {
+            badge.className += ' badge-danger';
+            badge.textContent = '⛔ 禁用';
+          } else {
+            badge.className += ' badge-normal';
+            badge.textContent = `${animInfo.frames} 格 / ${animInfo.fps} fps`;
+          }
+        }
+
+        item.appendChild(leftMeta);
+        item.appendChild(badge);
+
+        // 點擊列表項目即可在 Live Preview 中播放該動畫
+        item.addEventListener('click', () => {
+          if (animInfo) {
+            selectAnimation(animInfo.name);
+          }
+        });
+
+        rowList.appendChild(item);
+      }
+    }
+
+    /**
+     * 切換當前預覽的動畫名稱
+     */
+    function selectAnimation(animName) {
+      if (!CAT_ANIMS[animName]) return;
+      previewState.name = animName;
+      previewState.frame = 0;
+      previewState.elapsed = 0;
+      animSelect.value = animName;
+      updateAnimStats();
+      renderRowList();
+    }
+
+    /**
+     * 更新動畫數據狀態顯示
+     */
+    function updateAnimStats() {
+      const anim = CAT_ANIMS[previewState.name];
+      if (!anim) return;
+
+      statRow.textContent = anim.row;
+      statFrames.textContent = anim.frames;
+      statFps.textContent = anim.fps;
+
+      const isForbidden = FORBIDDEN_ANIMS.has(previewState.name);
+      forbiddenWarning.style.display = isForbidden ? 'flex' : 'none';
+    }
+
+    /**
+     * 即時預覽 Loop (requestAnimationFrame)
+     */
+    function previewLoop(timestamp) {
+      const dt = (timestamp - lastAnimTime) / 1000;
+      lastAnimTime = timestamp;
+
+      if (isPlaying && currentImage) {
+        const anim = CAT_ANIMS[previewState.name];
+        if (anim && anim.fps > 0) {
+          previewState.elapsed += dt;
+          const frameDuration = 1 / anim.fps;
+          while (previewState.elapsed >= frameDuration) {
+            previewState.elapsed -= frameDuration;
+            previewState.frame = (previewState.frame + 1) % anim.frames;
+          }
+        }
+      }
+
+      renderPreviewFrame();
+      requestAnimationFrame(previewLoop);
+    }
+
+    /**
+     * 繪製單影格至 Live Preview Canvas (4x 放大)
+     */
+    function renderPreviewFrame() {
+      previewCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+      previewCtx.imageSmoothingEnabled = false;
+
+      if (!currentImage) return;
+
+      const anim = CAT_ANIMS[previewState.name] || CAT_ANIMS.rest_1;
+      const row = anim.row;
+      const frame = previewState.frame % anim.frames;
+
+      // 繪製中央 32x32 影格 (放大 4 倍至 128x128)
+      previewCtx.drawImage(
+        currentImage,
+        frame * 32, row * 32, 32, 32,
+        0, 0, 128, 128
+      );
+    }
+
+    // -----------------------------------------------------------------
+    // 事件監聽綁定
+    // -----------------------------------------------------------------
+    assetSelect.addEventListener('change', loadSelectedAsset);
+
+    scaleSelect.addEventListener('change', (e) => {
+      currentScale = parseInt(e.target.value, 10);
+      renderMainCanvas();
+    });
+
+    showGridCheck.addEventListener('change', renderMainCanvas);
+    showLabelsCheck.addEventListener('change', renderMainCanvas);
+
+    animSelect.addEventListener('change', (e) => {
+      selectAnimation(e.target.value);
+    });
+
+    playPauseBtn.addEventListener('click', () => {
+      isPlaying = !isPlaying;
+      playPauseBtn.textContent = isPlaying ? '⏸ 暫停' : '▶ 播放';
+    });
+
+    // -----------------------------------------------------------------
+    // 初始化執行
+    // -----------------------------------------------------------------
+    initDropdowns();
+    loadSelectedAsset();
+    updateAnimStats();
+    requestAnimationFrame(previewLoop);
+
+  </script>
+</body>
+</html>
