@@ -360,9 +360,32 @@ function wireControls() {
       refreshControls();
       setSaveState(S.readOnly ? '唯讀' : '已連接');
     } catch (e) {
-      if (e && e.name === 'AbortError') return; // 老師按了取消，不是錯誤
-      console.error(e);
-      showBanner('連接資料夾失敗：' + (e && e.message), 'error');
+      console.error('連接資料夾失敗', e);
+      const name = (e && e.name) || '未知錯誤';
+
+      if (name === 'AbortError') {
+        // 【不要靜靜吞掉】AbortError 有兩種來源：老師自己按取消，
+        // 或是選擇器根本沒開起來（被瀏覽器政策、擴充功能或環境阻擋）。
+        // 兩者無法從錯誤本身分辨，所以一律給回饋，否則按鈕看起來像壞掉。
+        setSaveState('選擇已取消');
+        showBanner(
+          '資料夾選擇視窗被取消，或是根本沒有開起來。\n\n' +
+          '如果你剛才有看到選擇視窗並按了取消，那這是正常的，忽略這則訊息即可。\n' +
+          '如果你完全沒看到任何視窗，請依序檢查：\n' +
+          '  1. 視窗可能開在 Chrome 後面或另一個螢幕，看一下工作列\n' +
+          '  2. 用無痕視窗（Ctrl+Shift+N）開 ' + location.origin + ' 再試一次，\n' +
+          '     可以排除擴充功能干擾\n' +
+          '  3. 網址列輸入 chrome://policy 看有沒有檔案存取相關的限制\n\n' +
+          '技術資訊：' + name + '　·　' + (e && e.message), 'warn'
+        );
+        return;
+      }
+
+      setSaveState('連接失敗');
+      showBanner(
+        '連接資料夾失敗。\n\n' +
+        '技術資訊：' + name + '　·　' + (e && e.message), 'error'
+      );
     }
   });
 

@@ -71,12 +71,15 @@ function fsaSupported() {
   return typeof window !== 'undefined' && typeof window.showDirectoryPicker === 'function';
 }
 
-/* 老師手動選資料夾。必須由使用者的點擊觸發，不能自動呼叫。 */
+/* 老師手動選資料夾。必須由使用者的點擊觸發，不能自動呼叫。
+ *
+ * 參數刻意維持最精簡。startIn 曾經指定為 'documents'，但那個目錄在某些
+ * 環境（例如被 OneDrive 接管）會讓選擇器開不起來，而且它只是個方便性選項。
+ * id 用來讓 Chrome 記住上次選過的位置。 */
 async function pickDataDir() {
   const handle = await window.showDirectoryPicker({
     id: 'pixel-town-data',
     mode: 'readwrite',
-    startIn: 'documents',
   });
   await idbSet(IDB_KEY, handle);
   return handle;
