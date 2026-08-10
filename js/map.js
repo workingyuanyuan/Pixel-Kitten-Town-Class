@@ -264,16 +264,28 @@ function generateMap(seed, cols, rows) {
     return 0.5 + 0.32 * a + 0.18 * b;   // 約 0..1
   }
 
-  function plantBush(c, r, allowLarge) {
-    if (allowLarge && rand() < 0.34) {
-      const L = pick(PLANT.BUSHES_LARGE);
-      // 大叢灌木往上長，要確認上方還在圖內
-      if (r - L.h + 1 >= 0) {
-        put('shadowPlant', [L.col, L.row], c, r - L.h + 1, L.w, L.h);
-        put('plant', [L.col, L.row], c, r - L.h + 1, L.w, L.h);
-        return true;
+  /* 大灌木用像素矩形繪製（見 tileset.js 的說明），所以另外開一個放置函式。 */
+  function putLargeBush(c, r) {
+    const L = pick(PLANT.BUSHES_LARGE);
+    const col = c, row = r - L.h + 1;
+    if (col < 0 || row < 0 || col + L.w > cols || row + L.h > rows) return false;
+    // 佔用的格子必須都還沒被別的東西用掉
+    for (let dr = 0; dr < L.h; dr++) {
+      for (let dc = 0; dc < L.w; dc++) {
+        if (road[row + dr][col + dc] || solid[row + dr][col + dc]) return false;
       }
     }
+    const spec = { px: [L.sx, L.sy, L.sw, L.sh] };
+    overlays.push(Object.assign({ sheet: 'shadowPlant', w: L.w, h: L.h, col, row }, spec));
+    overlays.push(Object.assign({ sheet: 'plant', w: L.w, h: L.h, col, row }, spec));
+    for (let dr = 0; dr < L.h; dr++) {
+      for (let dc = 0; dc < L.w; dc++) blocked[row + dr][col + dc] = true;
+    }
+    return true;
+  }
+
+  function plantBush(c, r, allowLarge) {
+    if (allowLarge && rand() < 0.4 && putLargeBush(c, r)) return true;
     const b = pick(PLANT.BUSHES);
     put('shadowPlant', b, c, r);
     put('plant', b, c, r);
@@ -293,8 +305,8 @@ function generateMap(seed, cols, rows) {
 
       const d = hedgeDensity(t);
       if (d < 0.18) continue;                    // 缺口：讓樹籬有呼吸
-      // 只有下緣與左右緣有往上長的空間，上緣不放大叢（會超出圖外）
-      plantBush(c, r, r !== 0 && d > 0.72);
+      // 大叢灌木往上、往右長，上緣與最右欄沒有空間
+      plantBush(c, r, r !== 0 && c < cols - 2 && d > 0.7);
     }
   }
 
@@ -491,11 +503,20 @@ function drawOverlay(ctx, mapData, images, row) {
     const isShadow = (o.sheet === 'shadowPlant');
     if (isShadow) ctx.globalAlpha = 0.26;
 
-    ctx.drawImage(
-      img,
-      o.src[0] * T, o.src[1] * T, o.w * T, o.h * T,
-      o.col * T, o.row * T, o.w * T, o.h * T
-    );
+    if (o.px) {
+      /* 像素精確的來源矩形。用於圖集上彼此挨太近、無法用格線切開的
+       * 物件（大灌木）。在自己的格子範圍內置中、貼齊底部。 */
+      const [sx, sy, sw, sh] = o.px;
+      const dx = o.col * T + Math.round((o.w * T - sw) / 2);
+      const dy = (o.row + o.h) * T - sh;
+      ctx.drawImage(img, sx, sy, sw, sh, dx, dy, sw, sh);
+    } else {
+      ctx.drawImage(
+        img,
+        o.src[0] * T, o.src[1] * T, o.w * T, o.h * T,
+        o.col * T, o.row * T, o.w * T, o.h * T
+      );
+    }
 
     if (isShadow) ctx.globalAlpha = 1;
   }
