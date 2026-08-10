@@ -189,6 +189,7 @@ const TILE_ASSETS = {
   grass: 'assets/Pixel Art Top Down - Basic v1.2.3/Texture/TX Tileset Grass.png',
   stone: 'assets/Pixel Art Top Down - Basic v1.2.3/Texture/TX Tileset Stone Ground.png',
   props: 'assets/Pixel Art Top Down - Basic v1.2.3/Texture/TX Props.png',
+  wall: 'assets/Pixel Art Top Down - Basic v1.2.3/Texture/TX Tileset Wall.png',
   plant: 'assets/Pixel Art Top Down - Basic v1.2.3/Texture/TX Plant.png',
   shadowPlant: 'assets/Pixel Art Top Down - Basic v1.2.3/Texture/TX Shadow Plant.png',
 };
