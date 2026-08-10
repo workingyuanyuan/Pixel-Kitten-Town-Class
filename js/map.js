@@ -1,27 +1,22 @@
 /* =====================================================================
- * map.js — 有規劃的俯視地圖：院落、道路、植栽
+ * map.js — 有層次、有規劃的俯視地圖
  * =====================================================================
  *
- * 這一版的設計原則，是照著 Cainos 官方示範地圖的邏輯重寫的：
+ * 設計原則（照 Cainos 官方示範地圖的邏輯）：
  *
- *   1. 石板是「路」，不是「點綴」。
- *      官方圖裡的石板彼此相鄰、連成有寬度有走向的道路，邊緣才不規則。
- *      用機率隨機灑點會變成一堆沒有意義的雜訊 —— 那是前一版的錯誤。
+ *   1. 有高低差才有層次。上層平台的南側露出一道擋土牆立面，配一座階梯
+ *      走下來。少了這道牆，整張圖就只是一片平的草皮。
+ *   2. 石板是「路」，不是點綴。道路連續鋪滿、有寬度有走向，只有邊緣不規則。
+ *   3. 撐起秩序的是牆。院落、門洞，讓畫面看起來被設計過。
+ *   4. 灌木是散落的植栽，不是圍牆。沿著地圖四周圍一圈灌木很不自然，
+ *      真正的場景裡它們是零星長在空地上的。
+ *   5. 一切都要落地：植物先畫半透明影子再畫本體。
  *
- *   2. 撐起「規劃感」的是牆。
- *      有圍牆圍出的院落、有門、有從門口延伸出去的路，畫面才像被設計過。
- *      沒有牆的話，再多道具也只是散落在草地上的雜物。
- *
- *   3. 東西沿著結構擺。
- *      道具靠牆邊、靠路邊；樹在院落外圍成林。不要平均散佈。
- *
- *   4. 一切都要落地。
- *      樹與灌木先畫影子再畫本體，否則會像貼紙浮在草皮上。
+ * 【物件一律用像素矩形繪製】理由見 tileset.js 開頭。簡單說：這些圖集
+ * 不是每格一個物件，用格線切一定會切到隔壁，造成描邊斷裂、上緣被砍、
+ * 憑空出現碎片。
  * ===================================================================== */
 
-/**
- * 種子偽隨機數生成器 (Mulberry32)。
- */
 function mulberry32(seed) {
   let a = seed >>> 0;
   return function () {
@@ -32,14 +27,10 @@ function mulberry32(seed) {
   };
 }
 
-/* 這一格還是原始的乾淨草地嗎。用來避免蓋掉已經有裝飾的格子。 */
 function isPlainGrass(src) {
   return src[0] === GRASS.PLAIN[0] && src[1] === GRASS.PLAIN[1];
 }
 
-/**
- * 產生地圖。純資料，不碰 DOM。
- */
 function generateMap(seed, cols, rows) {
   const rand = mulberry32(seed);
   const ri = (min, max) => min + Math.floor(rand() * (max - min + 1));
@@ -47,428 +38,310 @@ function generateMap(seed, cols, rows) {
 
   const ground = [];
   const blocked = [];
-  const road = [];      // 是不是道路或院內鋪面
-  const solid = [];     // 是不是牆體（樹與道具都要避開）
+  const road = [];
+  const solid = [];
+  const upper = [];   // 是不是在上層平台上
 
   for (let r = 0; r < rows; r++) {
     ground.push(new Array(cols));
     blocked.push(new Array(cols).fill(false));
     road.push(new Array(cols).fill(false));
     solid.push(new Array(cols).fill(false));
+    upper.push(new Array(cols).fill(false));
     for (let c = 0; c < cols; c++) {
       const v = rand();
       ground[r][c] = {
         sheet: 'grass',
-        src: v < 0.72 ? GRASS.PLAIN : (v < 0.94 ? pick(GRASS.TUFT) : pick(GRASS.FLOWER)),
+        src: v < 0.74 ? GRASS.PLAIN : (v < 0.95 ? pick(GRASS.TUFT) : pick(GRASS.FLOWER)),
       };
     }
   }
 
   const overlays = [];
-  const inBounds = (c, r) => c >= 0 && r >= 0 && c < cols && r < rows;
-  const put = (sheet, src, c, r, w, h) => overlays.push({ sheet, src, w: w || 1, h: h || 1, col: c, row: r });
+  const inB = (c, r) => c >= 0 && r >= 0 && c < cols && r < rows;
 
-  /* ===================================================================
-   * 1. 院落
-   *
-   * 一圈圍牆，南面牆有牆頂與正面兩層，門開在南面牆上。
-   * 院子裡鋪石板，是整張地圖的視覺重心。
-   * =================================================================== */
-  const compounds = [];
+  /* 放一個像素矩形物件。col/row 是它佔位範圍的左上角。 */
+  function obj(sheet, o, col, row) {
+    overlays.push({ sheet, px: [o.sx, o.sy, o.sw, o.sh], w: o.w, h: o.h, col, row });
+  }
+  /* 地磚性質的東西（牆）仍用格座標。 */
+  function tile(sheet, src, col, row) {
+    overlays.push({ sheet, src, w: 1, h: 1, col, row });
+  }
+  /* 植物要先影子再本體。 */
+  function plant(o, col, row) {
+    obj('shadowPlant', o, col, row);
+    obj('plant', o, col, row);
+  }
 
-  function buildCompound(x, y, w, h) {
-    // 南面牆的正面要再往下佔一列，先確認空間夠
-    if (x < 1 || y < 1 || x + w > cols - 1 || y + h + 1 > rows - 1) return false;
-
-    for (const cp of compounds) {
-      if (x < cp.x + cp.w + 2 && x + w + 2 > cp.x &&
-          y < cp.y + cp.h + 3 && y + h + 3 > cp.y) return false;
-    }
-
-    // 門開在南面牆，避開兩端轉角
-    const gate = ri(x + 1, x + w - 2);
-
-    for (let c = x; c < x + w; c++) {
-      for (let r = y; r < y + h; r++) {
-        const isL = c === x, isR = c === x + w - 1;
-        const isT = r === y, isB = r === y + h - 1;
-        if (!isL && !isR && !isT && !isB) {
-          // 院內鋪面
-          ground[r][c] = { sheet: 'grass', src: pick(GRASS.BLEND_DENSE) };
-          road[r][c] = true;
-          continue;
-        }
-
-        let src = null;
-        if (isT && isL) src = WALL.TL;
-        else if (isT && isR) src = WALL.TR;
-        else if (isT) src = WALL.T;
-        else if (isB && isL) src = WALL.BL;
-        else if (isB && isR) src = WALL.BR;
-        else if (isB) src = WALL.B;
-        else if (isL) src = WALL.L;
-        else if (isR) src = WALL.R;
-
-        if (isB && c === gate) {
-          // 門口：不畫牆，鋪成路讓人走進去
-          ground[r][c] = { sheet: 'grass', src: pick(GRASS.BLEND_DENSE) };
-          road[r][c] = true;
-          continue;
-        }
-
-        put('wall', src, c, r);
-        blocked[r][c] = true;
-        solid[r][c] = true;
-
-        // 南面牆的正面，畫在牆頂的下一列
-        if (isB) {
-          const face = isL ? WALL.BLF : (isR ? WALL.BRF : WALL.BF);
-          put('wall', face, c, r + 1);
-          blocked[r + 1][c] = true;
-          solid[r + 1][c] = true;
-        }
+  function areaFree(col, row, w, h) {
+    for (let r = row; r < row + h; r++) {
+      for (let c = col; c < col + w; c++) {
+        if (!inB(c, r) || blocked[r][c] || road[r][c] || solid[r][c]) return false;
       }
     }
-
-    /* 院子中央擺一個焦點物件（石壇或石井）。
-     * 官方示範地圖的中庭也是這樣處理的 —— 有焦點，院子才不只是一塊空地。 */
-    const iw = w - 2, ih = h - 2;
-    const candidates = PROPS.CENTERPIECES.filter((p) => p.w <= iw - 1 && p.h <= ih);
-    if (candidates.length) {
-      const p = pick(candidates);
-      const cy = y + 1 + Math.floor((ih - p.h) / 2);
-      const lo = x + 1, hi = x + w - 1 - p.w;
-
-      /* 置中，但要閃開門口那一欄 —— 焦點物件擋住動線就本末倒置了。
-       * 先往左讓，讓不開再往右讓，兩邊都不行才放棄。 */
-      let cx = x + 1 + Math.floor((iw - p.w) / 2);
-      const blocksGate = (px) => gate >= px && gate < px + p.w;
-      if (blocksGate(cx)) {
-        const left = gate - p.w;
-        const right = gate + 1;
-        if (left >= lo) cx = left;
-        else if (right <= hi) cx = right;
-        else cx = -1;
-      }
-
-      if (cx >= lo && cx <= hi) {
-        put('props', [p.col, p.row], cx, cy, p.w, p.h);
-        for (let dr = 0; dr < p.h; dr++) {
-          for (let dc = 0; dc < p.w; dc++) {
-            blocked[cy + dr][cx + dc] = true;
-            solid[cy + dr][cx + dc] = true;
-          }
-        }
-      }
-    }
-
-    compounds.push({ x, y, w, h, gate });
     return true;
   }
 
-  // 主院落靠上方，是畫面的重心
-  const mainW = ri(8, Math.min(12, cols - 8));
-  const mainH = ri(4, 5);
-  const mainX = ri(3, Math.max(3, cols - mainW - 3));
-  buildCompound(mainX, 1, mainW, mainH);
-
-  // 有空間的話，再放一個小院落在另一側
-  if (cols >= 24) {
-    const sw = ri(5, 7), sh = ri(3, 4);
-    const leftSide = mainX > cols / 2;
-    const sx = leftSide ? ri(2, Math.max(2, mainX - sw - 3))
-                        : ri(Math.min(cols - sw - 2, mainX + mainW + 3), cols - sw - 2);
-    buildCompound(sx, rows - sh - 4, sw, sh);
+  function markBlocked(col, row, w, h, isSolid) {
+    for (let r = row; r < row + h; r++) {
+      for (let c = col; c < col + w; c++) {
+        if (!inB(c, r)) continue;
+        blocked[r][c] = true;
+        if (isSolid) solid[r][c] = true;
+      }
+    }
   }
 
   /* ===================================================================
-   * 2. 道路
+   * 1. 上層平台
    *
-   * 一條橫貫地圖的主幹道，加上從每個院落門口接出來的支線。
-   * 道路是「連續鋪滿」的，這是它看起來像路而不像雜訊的唯一原因。
+   * 平台的南緣露出 3 列高的擋土牆立面，中間開一座階梯。
+   * 這是整張圖「有層次」的來源。
    * =================================================================== */
-  function paveCell(c, r) {
-    if (!inBounds(c, r)) return;
-    if (solid[r][c] || blocked[r][c]) return;
+  const terrW = Math.max(10, Math.min(cols - 8, 2 * ri(8, Math.floor((cols - 8) / 2))));
+  const terrX = ri(2, Math.max(2, cols - terrW - 2));
+  const terrY = 1;
+  const terrH = ri(4, 6);                 // 平台上表面的高度（列）
+  const faceRow = terrY + terrH;          // 立面第一列
+  const groundRow = faceRow + 3;          // 立面之下才是下層地面
+
+  // 平台上表面：鋪一部分石板，其餘留草
+  for (let r = terrY; r < faceRow; r++) {
+    for (let c = terrX; c < terrX + terrW; c++) {
+      upper[r][c] = true;
+    }
+  }
+
+  // 立面：每 2 格一塊，最後留一段給階梯
+  const stairW = 3;
+  const stairCol = terrX + 1 + 2 * ri(0, Math.max(0, Math.floor((terrW - stairW - 2) / 2)));
+
+  for (let c = terrX; c < terrX + terrW; c += 2) {
+    if (c + 1 >= stairCol && c <= stairCol + stairW - 1) continue;   // 讓位給階梯
+    const f = pick(STRUCT.WALL_FACE);
+    obj('struct', f, c, faceRow);
+    markBlocked(c, faceRow, 2, 3, true);
+  }
+
+  // 階梯
+  const st = pick(STRUCT.STAIRS);
+  obj('struct', st, stairCol, faceRow);
+  markBlocked(stairCol, faceRow, stairW, 3, true);
+
+  /* ===================================================================
+   * 2. 平台上的院落
+   * =================================================================== */
+  let compound = null;
+  const compW = Math.min(terrW - 4, ri(8, 12));
+  const compH = Math.min(terrH, 5);
+  if (compW >= 6 && compH >= 4) {
+    const cx0 = terrX + Math.floor((terrW - compW) / 2);
+    const cy0 = terrY;
+    const gate = cx0 + Math.floor(compW / 2);
+
+    for (let c = cx0; c < cx0 + compW; c++) {
+      for (let r = cy0; r < cy0 + compH; r++) {
+        const isL = c === cx0, isR = c === cx0 + compW - 1;
+        const isT = r === cy0, isB = r === cy0 + compH - 1;
+        if (!isL && !isR && !isT && !isB) {
+          ground[r][c] = { sheet: 'stone', src: pick(STONE_FLOOR.SOLID) };
+          road[r][c] = true;
+          continue;
+        }
+        if (isB && Math.abs(c - gate) <= 1) {
+          ground[r][c] = { sheet: 'grass', src: pick(GRASS.BLEND_DENSE) };
+          road[r][c] = true;
+          continue;
+        }
+        let src = isT && isL ? WALL.TL : isT && isR ? WALL.TR : isT ? WALL.T
+          : isB && isL ? WALL.BL : isB && isR ? WALL.BR : isB ? WALL.B
+          : isL ? WALL.L : WALL.R;
+        tile('wall', src, c, r);
+        blocked[r][c] = true; solid[r][c] = true;
+      }
+    }
+    compound = { x: cx0, y: cy0, w: compW, h: compH, gate };
+
+    // 中庭焦點
+    const fits = PROPS.CENTERPIECES.filter((p) => p.w <= compW - 4 && p.h <= compH - 2);
+    if (fits.length) {
+      const p = pick(fits);
+      let px = cx0 + 1 + Math.floor((compW - 2 - p.w) / 2);
+      if (Math.abs(px - gate) <= 1) px = Math.max(cx0 + 1, px - p.w - 1);
+      const py = cy0 + 1 + Math.floor((compH - 2 - p.h) / 2);
+      obj('props', p, px, py);
+      markBlocked(px, py, p.w, p.h, true);
+    }
+  }
+
+  /* ===================================================================
+   * 3. 道路
+   * =================================================================== */
+  function pave(c, r) {
+    if (!inB(c, r) || blocked[r][c] || solid[r][c]) return;
     ground[r][c] = { sheet: 'grass', src: pick(GRASS.BLEND_DENSE) };
     road[r][c] = true;
   }
 
-  function paveRow(r, c0, c1, width) {
-    for (let c = Math.min(c0, c1); c <= Math.max(c0, c1); c++) {
-      for (let k = 0; k < width; k++) paveCell(c, r + k);
-    }
+  // 主幹道：橫貫下層
+  const mainRow = Math.min(rows - 4, groundRow + ri(2, Math.max(2, Math.floor((rows - groundRow) / 2))));
+  for (let c = 1; c < cols - 1; c++) { pave(c, mainRow); pave(c, mainRow + 1); }
+
+  // 階梯下來接到主幹道
+  for (let r = groundRow; r <= mainRow; r++) {
+    for (let k = 0; k < stairW; k++) pave(stairCol + k, r);
   }
 
-  function paveCol(c, r0, r1, width) {
-    for (let r = Math.min(r0, r1); r <= Math.max(r0, r1); r++) {
-      for (let k = 0; k < width; k++) paveCell(c + k, r);
-    }
-  }
+  // 一條往下的支線，讓下半部不會空
+  const branchCol = ri(3, cols - 4);
+  for (let r = mainRow + 2; r < rows - 2; r++) pave(branchCol, r);
 
-  // 主幹道：橫貫，寬 2，位置落在下半部但不貼邊
-  const mainRoadRow = Math.min(rows - 4, Math.max(Math.floor(rows * 0.55), 1 + mainH + 2));
-  paveRow(mainRoadRow, 1, cols - 2, 2);
-
-  // 支線：從每個院落的門口垂直接到主幹道
-  for (const cp of compounds) {
-    const gateRow = cp.y + cp.h;           // 門口下方那一列（南面牆正面所在列）
-    const from = Math.min(gateRow + 1, rows - 2);
-    const to = mainRoadRow;
-    paveCol(cp.gate, Math.min(from, to), Math.max(from, to), 1);
-    // 門口前面鋪一小塊，讓出入口有個緩衝
-    paveCell(cp.gate - 1, from);
-    paveCell(cp.gate + 1, from);
-  }
-
-  /* 路緣羽化：路旁一圈用中等混草，再外圈零星幾塊，
-   * 石板才會自然地融進草地，而不是一刀切。 */
-  const isRoad = (c, r) => inBounds(c, r) && road[r][c];
-  const roadNeighbours = (c, r) => {
+  // 路緣羽化
+  const nRoad = (c, r) => {
     let n = 0;
-    for (let dr = -1; dr <= 1; dr++) {
-      for (let dc = -1; dc <= 1; dc++) {
-        if (dc === 0 && dr === 0) continue;
-        if (isRoad(c + dc, r + dr)) n++;
-      }
+    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+      if ((dc || dr) && inB(c + dc, r + dr) && road[r + dr][c + dc]) n++;
     }
     return n;
   };
-
   for (let r = 1; r < rows - 1; r++) {
     for (let c = 1; c < cols - 1; c++) {
       if (road[r][c] || blocked[r][c]) continue;
-      const n = roadNeighbours(c, r);
-      if (n >= 3 && rand() < 0.7) {
-        ground[r][c] = { sheet: 'grass', src: pick(GRASS.BLEND_MEDIUM) };
-      } else if (n >= 1 && rand() < 0.35) {
-        ground[r][c] = { sheet: 'grass', src: pick(GRASS.BLEND_SPARSE) };
-      }
+      const n = nRoad(c, r);
+      if (n >= 3 && rand() < 0.7) ground[r][c] = { sheet: 'grass', src: pick(GRASS.BLEND_MEDIUM) };
+      else if (n >= 1 && rand() < 0.35) ground[r][c] = { sheet: 'grass', src: pick(GRASS.BLEND_SPARSE) };
     }
   }
 
   /* ===================================================================
-   * 3. 邊界樹籬
+   * 4. 邊界
    *
-   * 不要一圈一模一樣的小灌木 —— 那是複製貼上，不是樹籬。
-   * 用一條低頻的波去調整密度，長出成叢與缺口；再讓大叢灌木往內站一格，
-   * 形成前後兩層，邊界才有厚度與起伏。
+   * 只擋住不讓貓走出去，不畫任何東西。
+   * 沿著四周圍一圈灌木很不自然 —— 真正的場景裡沒有那種東西。
+   * 畫面的邊界交給畫布本身的外框處理。
    * =================================================================== */
-  const hedgePhase = rand() * Math.PI * 2;
-
-  /* 沿著邊界走一圈的位置參數 t，轉成 0..1 的密度。
-   * 兩個不同週期的正弦疊加，看起來像自然的疏密，而不是規律的鋸齒。 */
-  function hedgeDensity(t) {
-    const a = Math.sin(t * 0.55 + hedgePhase);
-    const b = Math.sin(t * 0.23 + hedgePhase * 1.7);
-    return 0.5 + 0.32 * a + 0.18 * b;   // 約 0..1
-  }
-
-  /* 大灌木用像素矩形繪製（見 tileset.js 的說明），所以另外開一個放置函式。 */
-  function putLargeBush(c, r) {
-    const L = pick(PLANT.BUSHES_LARGE);
-    const col = c, row = r - L.h + 1;
-    if (col < 0 || row < 0 || col + L.w > cols || row + L.h > rows) return false;
-    // 佔用的格子必須都還沒被別的東西用掉
-    for (let dr = 0; dr < L.h; dr++) {
-      for (let dc = 0; dc < L.w; dc++) {
-        if (road[row + dr][col + dc] || solid[row + dr][col + dc]) return false;
-      }
-    }
-    const spec = { px: [L.sx, L.sy, L.sw, L.sh] };
-    overlays.push(Object.assign({ sheet: 'shadowPlant', w: L.w, h: L.h, col, row }, spec));
-    overlays.push(Object.assign({ sheet: 'plant', w: L.w, h: L.h, col, row }, spec));
-    for (let dr = 0; dr < L.h; dr++) {
-      for (let dc = 0; dc < L.w; dc++) blocked[row + dr][col + dc] = true;
-    }
-    return true;
-  }
-
-  function plantBush(c, r, allowLarge) {
-    if (allowLarge && rand() < 0.4 && putLargeBush(c, r)) return true;
-    const b = pick(PLANT.BUSHES);
-    put('shadowPlant', b, c, r);
-    put('plant', b, c, r);
-    return true;
-  }
-
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      if (r !== 0 && r !== rows - 1 && c !== 0 && c !== cols - 1) continue;
-      blocked[r][c] = true;
-
-      // 沿邊界的行走距離，讓疏密沿著邊界連續變化而不是每格獨立亂數
-      const t = (r === 0) ? c
-        : (c === cols - 1) ? cols + r
-        : (r === rows - 1) ? cols + rows + (cols - c)
-        : cols * 2 + rows + (rows - r);
-
-      const d = hedgeDensity(t);
-      if (d < 0.18) continue;                    // 缺口：讓樹籬有呼吸
-      // 大叢灌木往上、往右長，上緣與最右欄沒有空間
-      plantBush(c, r, r !== 0 && c < cols - 2 && d > 0.7);
-    }
-  }
-
-  /* 第二層：邊界往內一格零星補一些矮灌木與雜草，做出厚度。
-   * 這一層會擋路，所以放得很克制，避免吃掉貓的站位。 */
-  for (let r = 1; r < rows - 1; r++) {
-    for (let c = 1; c < cols - 1; c++) {
-      const onInnerRing = (r === 1 || r === rows - 2 || c === 1 || c === cols - 2);
-      if (!onInnerRing || blocked[r][c] || road[r][c] || solid[r][c]) continue;
-      const t = c * 1.3 + r * 0.7;
-      const d = hedgeDensity(t + 3.1);
-      if (d > 0.78 && rand() < 0.45) {
-        const b = pick(PLANT.BUSHES);
-        put('shadowPlant', b, c, r);
-        put('plant', b, c, r);
-        blocked[r][c] = true;
-      } else if (rand() < 0.22) {
-        put('plant', pick(PLANT.WEEDS), c, r);   // 雜草不擋路
-      }
+      if (r === 0 || r === rows - 1 || c === 0 || c === cols - 1) blocked[r][c] = true;
     }
   }
 
   /* ===================================================================
-   * 4. 樹
-   *
-   * 沿著地圖外緣與院落外圍成林，不要平均散佈在中間擋住貓。
+   * 5. 樹
    * =================================================================== */
   const trunks = [];
   function tryTree(col, row) {
     const t = pick(PLANT.TREES);
     if (col < 1 || row < 1 || col + t.w > cols - 1 || row + t.h > rows - 1) return false;
-    const tc = col + t.anchorCol, tr = row + t.h - 1;
-    if (!inBounds(tc, tr) || blocked[tr][tc] || road[tr][tc]) return false;
-    // 樹冠不要蓋到院落
-    for (const cp of compounds) {
-      if (col < cp.x + cp.w && col + t.w > cp.x && row < cp.y + cp.h + 2 && row + t.h > cp.y) return false;
+    const tc = col + Math.floor(t.w / 2), tr = row + t.h - 1;
+    if (!inB(tc, tr) || blocked[tr][tc] || road[tr][tc]) return false;
+    // 樹冠不要蓋到平台立面或院落
+    for (let r = row; r < row + t.h; r++) {
+      for (let c = col; c < col + t.w; c++) {
+        if (inB(c, r) && solid[r][c]) return false;
+      }
     }
     for (const p of trunks) {
-      if (Math.max(Math.abs(p[0] - tc), Math.abs(p[1] - tr)) < 4) return false;
+      if (Math.max(Math.abs(p[0] - tc), Math.abs(p[1] - tr)) < 5) return false;
     }
-    put('shadowPlant', [t.col, t.row], col, row, t.w, t.h);
-    put('plant', [t.col, t.row], col, row, t.w, t.h);
+    plant(t, col, row);
     blocked[tr][tc] = true;
     trunks.push([tc, tr]);
     return true;
   }
-
-  for (let attempt = 0, made = 0; attempt < 220 && made < 9; attempt++) {
-    // 偏好左右兩側與下緣，中央留給貓
-    const edgeBias = rand();
-    let col;
-    if (edgeBias < 0.4) col = ri(1, Math.max(1, Math.floor(cols * 0.22)));
-    else if (edgeBias < 0.8) col = ri(Math.floor(cols * 0.74), cols - 5);
-    else col = ri(1, cols - 5);
-    const row = ri(Math.max(1, Math.floor(rows * 0.25)), rows - 6);
-    if (tryTree(col, row)) made++;
+  for (let a = 0, made = 0; a < 400 && made < 12; a++) {
+    if (tryTree(ri(1, cols - 5), ri(groundRow, rows - 6))) made++;
   }
 
   /* ===================================================================
-   * 5. 道具
-   *
-   * 只擺在「靠牆」或「靠路」的格子。散落在空地中央的木桶沒有故事，
-   * 靠著牆角的木桶才有。
+   * 6. 灌木 —— 零星散落，不圍成一圈
+   * =================================================================== */
+  for (let a = 0, made = 0; a < 300 && made < 14; a++) {
+    const c = ri(1, cols - 3), r = ri(1, rows - 2);
+    const useLarge = rand() < 0.45;
+    const b = useLarge ? pick(PLANT.BUSHES_LARGE) : pick(PLANT.BUSHES);
+    if (!areaFree(c, r, b.w, b.h)) continue;
+    // 別擋在路中間，也別黏在平台立面上
+    if (nRoad(c, r) > 2) continue;
+    plant(b, c, r);
+    markBlocked(c, r, b.w, b.h, false);
+    made++;
+  }
+
+  /* ===================================================================
+   * 7. 道具：只擺在靠牆或靠路的位置
    * =================================================================== */
   function nearStructure(c, r) {
-    for (let dr = -1; dr <= 1; dr++) {
-      for (let dc = -1; dc <= 1; dc++) {
-        const nc = c + dc, nr = r + dr;
-        if (!inBounds(nc, nr)) continue;
-        if (solid[nr][nc]) return true;
-        if (road[nr][nc] && !road[r][c]) return true;
-      }
+    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+      const nc = c + dc, nr = r + dr;
+      if (!inB(nc, nr)) continue;
+      if (solid[nr][nc]) return true;
+      if (road[nr][nc] && !road[r][c]) return true;
     }
     return false;
   }
-
-  const propCells = [];
+  const spots = [];
   for (let r = 2; r < rows - 2; r++) {
-    for (let c = 1; c < cols - 1; c++) {
-      if (blocked[r][c] || road[r][c]) continue;
-      if (nearStructure(c, r)) propCells.push([c, r]);
+    for (let c = 1; c < cols - 2; c++) {
+      if (!blocked[r][c] && !road[r][c] && nearStructure(c, r)) spots.push([c, r]);
     }
   }
-  // 依固定順序洗牌，維持決定性
-  for (let i = propCells.length - 1; i > 0; i--) {
+  for (let i = spots.length - 1; i > 0; i--) {
     const j = Math.floor(rand() * (i + 1));
-    const t = propCells[i]; propCells[i] = propCells[j]; propCells[j] = t;
+    const t = spots[i]; spots[i] = spots[j]; spots[j] = t;
   }
-
-  let placedProps = 0;
-  for (const [c, r] of propCells) {
-    if (placedProps >= 14) break;
+  let props = 0;
+  for (const [c, r] of spots) {
+    if (props >= 18) break;
     const p = pick(PROPS.SOLID);
-    if (c + p.w > cols - 1 || r + p.h > rows - 1) continue;
-    let ok = true;
-    for (let dr = 0; dr < p.h && ok; dr++) {
-      for (let dc = 0; dc < p.w; dc++) {
-        if (blocked[r + dr][c + dc] || road[r + dr][c + dc]) { ok = false; break; }
-      }
-    }
-    if (!ok) continue;
-    put('props', [p.col, p.row], c, r, p.w, p.h);
-    for (let dr = 0; dr < p.h; dr++) {
-      for (let dc = 0; dc < p.w; dc++) blocked[r + dr][c + dc] = true;
-    }
-    placedProps++;
+    if (!areaFree(c, r, p.w, p.h)) continue;
+    obj('props', p, c, r);
+    markBlocked(c, r, p.w, p.h, false);
+    props++;
   }
 
   /* ===================================================================
-   * 6. 細節：路上的碎石、草地的雜草
+   * 8. 細節
    * =================================================================== */
   for (let r = 1; r < rows - 1; r++) {
     for (let c = 1; c < cols - 1; c++) {
       if (blocked[r][c]) continue;
       if (road[r][c]) {
-        if (rand() < 0.04) put('props', pick(PROPS.PEBBLES), c, r);
-      } else if (isPlainGrass(ground[r][c].src) && rand() < 0.07) {
-        put('plant', pick(PLANT.WEEDS), c, r);
+        if (rand() < 0.05) obj('props', pick(PROPS.PEBBLES), c, r);
+      } else if (isPlainGrass(ground[r][c].src) && rand() < 0.09) {
+        obj('plant', pick(PLANT.WEEDS), c, r);
       }
     }
   }
 
-  /* 由下往上、由左往右排序，貓與物件才能正確互相遮擋。
-   * 影子必須排在同一格的本體前面，所以同錨點時影子優先。 */
+  /* 由上而下排序，貓與物件才能正確互相遮擋；同錨點時影子優先。 */
   overlays.sort((a, b) => {
     const aa = a.row + a.h - 1, bb = b.row + b.h - 1;
     if (aa !== bb) return aa - bb;
     if (a.col !== b.col) return a.col - b.col;
-    const rank = (s) => (s === 'shadowPlant' ? 0 : 1);
-    return rank(a.sheet) - rank(b.sheet);
+    return (a.sheet === 'shadowPlant' ? 0 : 1) - (b.sheet === 'shadowPlant' ? 0 : 1);
   });
 
-  /* 容量檢查 */
   let free = 0;
   for (let r = 1; r < rows - 1; r++) {
     for (let c = 1; c < cols - 1; c++) if (!blocked[r][c]) free++;
   }
-  if (free < 200) {
-    throw new Error(`地圖可用格子過少（${free}），請調大 MAP_COLS / MAP_ROWS。`);
-  }
+  if (free < 200) throw new Error(`地圖可用格子過少（${free}）。`);
 
-  return { cols, rows, ground, blocked, overlays };
+  return { cols, rows, ground, blocked, overlays, upper };
 }
 
 /* ---------------------------------------------------------------------
  * 繪製
  * ------------------------------------------------------------------- */
-
 function sheetImage(images, name) {
-  if (name === 'grass') return images.grass;
-  if (name === 'stone') return images.stone;
-  if (name === 'props') return images.props;
-  if (name === 'plant') return images.plant;
-  if (name === 'wall') return images.wall;
-  if (name === 'shadowPlant') return images.shadowPlant;
-  return null;
+  return images[name] || null;
 }
 
 function drawGround(ctx, mapData, images) {
   ctx.imageSmoothingEnabled = false;
   const T = TILE_SIZE;
-
   for (let r = 0; r < mapData.rows; r++) {
     for (let c = 0; c < mapData.cols; c++) {
       const g = mapData.ground[r][c];
@@ -492,30 +365,24 @@ function drawOverlay(ctx, mapData, images, row) {
     const o = list[i];
     const anchor = o.row + o.h - 1;
     if (anchor < row) continue;
-    if (anchor > row) break;          // 已排序，可提前結束
+    if (anchor > row) break;
 
     const img = sheetImage(images, o.sheet);
     if (!img) continue;
 
-    /* 【重要】陰影圖裡的像素是「完全不透明的深褐色」rgba(49,26,18,255)。
-     * 它本來就是設計成半透明疊加的（原作在 Unity 用陰影材質處理）。
-     * 直接畫上去會變成草地上一個個褐色破洞，而不是影子。 */
+    /* 陰影圖的像素是完全不透明的深褐色，原作是設計成半透明疊加的。
+     * 直接畫會在草地上挖出褐色的洞。 */
     const isShadow = (o.sheet === 'shadowPlant');
     if (isShadow) ctx.globalAlpha = 0.26;
 
     if (o.px) {
-      /* 像素精確的來源矩形。用於圖集上彼此挨太近、無法用格線切開的
-       * 物件（大灌木）。在自己的格子範圍內置中、貼齊底部。 */
       const [sx, sy, sw, sh] = o.px;
       const dx = o.col * T + Math.round((o.w * T - sw) / 2);
       const dy = (o.row + o.h) * T - sh;
       ctx.drawImage(img, sx, sy, sw, sh, dx, dy, sw, sh);
     } else {
-      ctx.drawImage(
-        img,
-        o.src[0] * T, o.src[1] * T, o.w * T, o.h * T,
-        o.col * T, o.row * T, o.w * T, o.h * T
-      );
+      ctx.drawImage(img, o.src[0] * T, o.src[1] * T, o.w * T, o.h * T,
+        o.col * T, o.row * T, o.w * T, o.h * T);
     }
 
     if (isShadow) ctx.globalAlpha = 1;

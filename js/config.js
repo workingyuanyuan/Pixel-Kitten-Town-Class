@@ -66,15 +66,15 @@ const CONFIG = {
 
   // 地圖大小（格數）。一格是 32 像素。
   //
-  // 預設 30 x 14 = 960 x 448 像素，放大兩倍是 1920 x 896。
-  // 這個數字是這樣算出來的：1080p 投影畫面扣掉瀏覽器的分頁列與網址列
-  // （約 100px）再扣掉本程式的工具列（48px），大約剩 900px 可用。
+  // 預設 40 x 22 = 1280 x 704 像素，在 1080p 上以 1 倍顯示。
   //
-  // 如果調大列數，放大倍率可能會從 2x 掉到 1x，貓和名字會變成一半大小、
-  // 投影到教室後排就看不清楚了。調完請看工具列右邊顯示的「放大 ?x」，
-  // 只要不是 2x 就代表太大了。按 F11 全螢幕可以多出約 100px 的空間。
-  MAP_COLS: 30,
-  MAP_ROWS: 14,
+  // 這是一個取捨：地圖大、有高低差與院落，場景比較豐富；代價是貓的圖
+  // 只有原尺寸，不像 2 倍放大時那麼大。名字與進度條不受影響 —— 它們畫在
+  // 另一層原生解析度的畫布上，字級是固定的，不會跟著地圖縮小。
+  //
+  // 想要貓大一點的話，把這裡改成 30 x 14，放大倍率就會回到 2x。
+  MAP_COLS: 40,
+  MAP_ROWS: 22,
 
   // 換這個數字就會產生一張完全不同、但同樣合理的地圖。
   // 同一個數字永遠產生一模一樣的地圖。
@@ -190,6 +190,7 @@ const TILE_ASSETS = {
   stone: 'assets/Pixel Art Top Down - Basic v1.2.3/Texture/TX Tileset Stone Ground.png',
   props: 'assets/Pixel Art Top Down - Basic v1.2.3/Texture/TX Props.png',
   wall: 'assets/Pixel Art Top Down - Basic v1.2.3/Texture/TX Tileset Wall.png',
+  struct: 'assets/Pixel Art Top Down - Basic v1.2.3/Texture/TX Struct.png',
   plant: 'assets/Pixel Art Top Down - Basic v1.2.3/Texture/TX Plant.png',
   shadowPlant: 'assets/Pixel Art Top Down - Basic v1.2.3/Texture/TX Shadow Plant.png',
 };

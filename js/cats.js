@@ -293,10 +293,17 @@ function drawCatsInRow(ctx, cats, bundle, row) {
  * scale 是像素層的放大倍率。
  * ------------------------------------------------------------------- */
 function drawCatLabels(lctx, cats, scale) {
-  const nameSize = Math.round(9 * scale);
-  const lvSize = Math.round(6.5 * scale);
-  const barW = 22 * scale;
-  const barH = 4 * scale;
+  /* 【重要】字級與進度條大小不跟著地圖縮放走。
+   *
+   * 標籤畫在原生解析度的那一層畫布上，如果字級乘上地圖倍率，地圖一放大
+   * （倍率 1x）中文字就會縮到 9px，投影到教室後排完全看不見。
+   * 地圖可以縮小換取更大的場景，但名字必須始終看得清楚 —— 那是這個
+   * 工具存在的理由。 */
+  const ui = Math.max(2, scale);
+  const nameSize = Math.round(9 * ui);
+  const lvSize = Math.round(6.5 * ui);
+  const barW = 22 * ui;
+  const barH = 4 * ui;
 
   lctx.textBaseline = 'alphabetic';
   lctx.lineJoin = 'round';
@@ -313,10 +320,10 @@ function drawCatLabels(lctx, cats, scale) {
     if (cat.hovered) {
       lctx.fillStyle = 'rgba(255, 255, 255, 0.13)';
       lctx.beginPath();
-      lctx.ellipse(cx, mid + 8 * scale, 15 * scale, 7 * scale, 0, 0, Math.PI * 2);
+      lctx.ellipse(cx, mid + 8 * scale, 15 * ui, 7 * ui, 0, 0, Math.PI * 2);
       lctx.fill();
       lctx.strokeStyle = 'rgba(123, 216, 143, 0.85)';
-      lctx.lineWidth = Math.max(2, scale);
+      lctx.lineWidth = Math.max(2, ui);
       lctx.stroke();
     }
 
@@ -326,13 +333,13 @@ function drawCatLabels(lctx, cats, scale) {
      *   ── 格子上緣 ──
      *   貓
      */
-    const barBottom = top - 3 * scale;
+    const barBottom = top - 3 * ui;
     const barY = barBottom - barH;
-    const nameY = barY - 3 * scale;
+    const nameY = barY - 3 * ui;
 
     // --- 滿級光環（畫在最底層）---
     if (pose.crown) {
-      const r = 20 * scale;
+      const r = 20 * ui;
       const g = lctx.createRadialGradient(cx, mid, 0, cx, mid, r);
       g.addColorStop(0, 'rgba(255, 214, 102, 0.32)');
       g.addColorStop(1, 'rgba(255, 214, 102, 0)');
@@ -346,9 +353,9 @@ function drawCatLabels(lctx, cats, scale) {
     if (cat.levelFx > 0) {
       const p = 1 - cat.levelFx / 2.0;
       lctx.strokeStyle = `rgba(255, 236, 160, ${(1 - p) * 0.9})`;
-      lctx.lineWidth = 3 * scale * (1 - p) + 1;
+      lctx.lineWidth = 3 * ui * (1 - p) + 1;
       lctx.beginPath();
-      lctx.arc(cx, mid, (10 + p * 26) * scale, 0, Math.PI * 2);
+      lctx.arc(cx, mid, (10 + p * 26) * ui, 0, Math.PI * 2);
       lctx.stroke();
     }
 
@@ -359,7 +366,7 @@ function drawCatLabels(lctx, cats, scale) {
 
     const nameFont = `600 ${nameSize}px "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", system-ui, sans-serif`;
     const lvFont = `600 ${lvSize}px system-ui, sans-serif`;
-    const gap = 5 * scale;
+    const gap = 5 * ui;
 
     lctx.font = nameFont;
     const nameW = lctx.measureText(nameText).width;
@@ -389,7 +396,7 @@ function drawCatLabels(lctx, cats, scale) {
     const bx = cx - barW / 2;
 
     lctx.fillStyle = 'rgba(24, 20, 28, 0.78)';
-    lctx.fillRect(bx - scale, barY - scale, barW + scale * 2, barH + scale * 2);
+    lctx.fillRect(bx - ui, barY - ui, barW + ui * 2, barH + ui * 2);
 
     lctx.fillStyle = 'rgba(255, 255, 255, 0.20)';
     lctx.fillRect(bx, barY, barW, barH);
@@ -403,9 +410,9 @@ function drawCatLabels(lctx, cats, scale) {
     lctx.textAlign = 'center';
     for (const f of cat.floats) {
       const p = f.t / 1.2;
-      const fy = nameY - 6 * scale - p * 16 * scale;
+      const fy = nameY - 6 * ui - p * 16 * ui;
       lctx.globalAlpha = 1 - p;
-      lctx.font = `700 ${Math.round(11 * scale)}px system-ui, sans-serif`;
+      lctx.font = `700 ${Math.round(11 * ui)}px system-ui, sans-serif`;
       lctx.strokeStyle = 'rgba(24, 20, 28, 0.9)';
       lctx.lineWidth = 4;
       lctx.strokeText(f.text, cx, fy);
