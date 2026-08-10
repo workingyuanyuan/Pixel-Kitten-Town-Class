@@ -109,6 +109,24 @@ async function confirmDataDir(handle) {
 }
 
 /* ---------------------------------------------------------------------
+ * 列出資料夾裡有哪些班級
+ *
+ * 一個班級就是一個 <班級代碼>.json。範例檔與匯出的 CSV 不算。
+ * 老師帶多個班時，工具列的下拉選單就是從這裡來的。
+ * ------------------------------------------------------------------- */
+async function listClasses(dirHandle) {
+  const ids = [];
+  for await (const [name, handle] of dirHandle.entries()) {
+    if (handle.kind !== 'file') continue;
+    if (!name.endsWith('.json')) continue;
+    if (name.endsWith('.example.json')) continue;
+    ids.push(name.slice(0, -'.json'.length));
+  }
+  ids.sort();
+  return ids;
+}
+
+/* ---------------------------------------------------------------------
  * 讀取
  *
  * 回傳形狀固定，呼叫端一律看 status：

@@ -127,10 +127,12 @@ function refreshPanel() {
     b.disabled = maxed || S.readOnly;
   });
   document.getElementById('panel-maxed-note').hidden = !maxed;
-  const hint = document.getElementById('panel-hint');
-  hint.textContent = S.readOnly
-    ? '尚未連接資料夾，目前無法加分'
-    : '快捷鍵：空白鍵或 Enter 加分　·　Esc 關閉';
+  if (S.readOnly) {
+    document.getElementById('panel-maxed-note').hidden = false;
+    document.getElementById('panel-maxed-note').textContent = '尚未連接資料夾，目前無法加分。';
+  } else if (maxed) {
+    document.getElementById('panel-maxed-note').textContent = '已達最高等級，不再累積分數。';
+  }
 
   renderLog(s);
 }

@@ -1,21 +1,7 @@
 /* =====================================================================
- * panel.css — 角色面板與編輯模式
+ * panel.css — 角色面板
+ * 配色沿用 main.css 裡從 Sprout Lands UI Pack 取樣出來的變數。
  * ===================================================================== */
-
-/* ---------------- 編輯模式的畫面提示 ---------------- */
-/* 低調的一圈顏色，讓老師一眼知道現在點貓會有反應。
-   不要做得太搶眼，這是投影在全班面前的畫面。 */
-#app.edit-mode #stage-wrap::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  box-shadow: inset 0 0 0 3px rgba(123, 216, 143, 0.55);
-  z-index: 5;
-}
-
-#app.edit-mode #stage { cursor: default; }
-#app.edit-mode #stage.on-cat { cursor: pointer; }
 
 /* ---------------- 面板本體 ---------------- */
 #panel {
@@ -25,9 +11,10 @@
   width: 380px;
   max-width: 92vw;
   height: 100%;
-  background: #251f2d;
-  border-left: 1px solid #3b3346;
-  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.35);
+  color: var(--ink);
+  background: var(--panel);
+  border-left: 4px solid var(--line);
+  box-shadow: inset 3px 0 0 var(--cream), -14px 0 34px rgba(0, 0, 0, 0.42);
   z-index: 40;
   display: flex;
   flex-direction: column;
@@ -47,24 +34,32 @@
   right: 14px;
   width: 34px;
   height: 34px;
-  font-size: 22px;
+  font-size: 20px;
+  font-weight: 700;
   line-height: 1;
-  color: #cabfd6;
-  background: transparent;
-  border: 1px solid #443c50;
-  border-radius: 8px;
+  color: var(--ink);
+  background: var(--btn);
+  border: 2px solid var(--line);
+  border-radius: 7px;
   cursor: pointer;
+  box-shadow: inset 0 2px 0 var(--cream), 0 3px 0 var(--btn-sh);
 }
 
-#panel-close:hover { background: #332c3d; }
+#panel-close:active {
+  transform: translateY(3px);
+  box-shadow: inset 0 2px 0 var(--cream), 0 0 0 var(--btn-sh);
+}
 
 /* ---------------- 大貓 ---------------- */
+/* 給貓一塊草地色的展示台，而不是讓牠浮在米色面板上 */
 #panel-cat-wrap {
   align-self: center;
-  margin: 8px 0 4px;
+  margin: 10px 0 6px;
   padding: 10px;
-  background: #2e2738;
+  background: linear-gradient(#7ba03f, #6b8f3a);
+  border: 3px solid var(--line);
   border-radius: 12px;
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.18);
 }
 
 #panel-cat {
@@ -77,14 +72,15 @@
 /* ---------------- 姓名與等級 ---------------- */
 #panel-name {
   font-size: 26px;
-  font-weight: 700;
+  font-weight: 800;
   text-align: center;
-  margin-top: 6px;
+  margin-top: 8px;
+  text-shadow: 0 1px 0 var(--cream);
 }
 
 #panel-seat {
   font-size: 13px;
-  color: #9a90a6;
+  color: #7a6455;
   text-align: center;
   min-height: 1em;
 }
@@ -98,41 +94,50 @@
 }
 
 #panel-level {
-  font-size: 22px;
-  font-weight: 700;
-  color: #7bd88f;
+  font-size: 23px;
+  font-weight: 800;
+  color: #3f7d3f;
   transition: transform 120ms ease-out;
   transform-origin: center;
 }
 
-#panel-title { font-size: 16px; color: #cabfd6; }
+#panel-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--mid);
+}
 
 /* ---------------- 進度條 ---------------- */
 #panel-bar {
   margin-top: 14px;
-  height: 16px;
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
+  height: 18px;
+  background: #b99b78;
+  border: 3px solid var(--line);
+  border-radius: 10px;
   overflow: hidden;
+  box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.28);
 }
 
 #panel-bar-fill {
   height: 100%;
   width: 0;
-  background: #7bd88f;
-  border-radius: 8px;
+  background: linear-gradient(#8ee09f, #5fbf72);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.45);
   transition: width 600ms ease-out;
 }
 
 /* 滿級用金色。絕不使用紅色 —— 見實作計畫第 8 節。 */
-#panel-bar-fill.maxed { background: #ffd666; }
+#panel-bar-fill.maxed {
+  background: linear-gradient(#ffe08a, #f0b93f);
+}
 
 #panel-meta {
   display: flex;
   justify-content: space-between;
   margin-top: 8px;
   font-size: 14px;
-  color: #b6abc2;
+  font-weight: 600;
+  color: #7a6455;
 }
 
 /* ---------------- 加分按鈕 ---------------- */
@@ -145,38 +150,39 @@
 .award-btn {
   flex: 1;
   font: inherit;
-  font-size: 18px;
-  font-weight: 700;
-  color: #16210f;
-  background: #7bd88f;
-  border: none;
-  border-radius: 10px;
-  padding: 14px 0;
+  font-size: 19px;
+  font-weight: 800;
+  color: #1e3a1e;
+  background: linear-gradient(#8ee09f, #6cc77e);
+  border: 3px solid #3f6b45;
+  border-radius: 11px;
+  padding: 13px 0 15px;
   cursor: pointer;
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.5), 0 5px 0 #4d8f5b;
 }
 
-.award-primary { font-size: 24px; padding: 18px 0; }
+.award-primary { font-size: 26px; padding: 17px 0 19px; }
 
-.award-btn:hover:not(:disabled) { background: #8fe3a2; }
-.award-btn:active:not(:disabled) { transform: translateY(1px); }
+.award-btn:hover:not(:disabled) { filter: brightness(1.06); }
+
+.award-btn:active:not(:disabled) {
+  transform: translateY(5px);
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.5), 0 0 0 #4d8f5b;
+}
 
 .award-btn:disabled {
-  background: #4a4457;
-  color: #8d8499;
+  color: #6d6257;
+  background: #c3b6a3;
+  border-color: #8d8171;
   cursor: default;
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.3), 0 5px 0 #a2957f;
 }
 
 #panel-maxed-note {
-  margin-top: 10px;
+  margin-top: 12px;
   font-size: 13px;
-  color: #d8c9a8;
-  text-align: center;
-}
-
-#panel-hint {
-  margin-top: 10px;
-  font-size: 12px;
-  color: #8c8296;
+  font-weight: 600;
+  color: var(--mid);
   text-align: center;
 }
 
@@ -184,20 +190,18 @@
 #panel-levelup {
   margin-top: 14px;
   text-align: center;
-  font-size: 18px;
-  font-weight: 700;
-  color: #ffd666;
+  font-size: 19px;
+  font-weight: 800;
+  color: #b8781c;
+  text-shadow: 0 1px 0 var(--cream);
   opacity: 0;
-  transform: translateY(6px);
 }
 
-#panel-levelup.show {
-  animation: levelup-in 2000ms ease-out;
-}
+#panel-levelup.show { animation: levelup-in 2000ms ease-out; }
 
 @keyframes levelup-in {
   0%   { opacity: 0; transform: translateY(10px) scale(0.9); }
-  12%  { opacity: 1; transform: translateY(0) scale(1.06); }
+  12%  { opacity: 1; transform: translateY(0) scale(1.08); }
   22%  { transform: translateY(0) scale(1); }
   78%  { opacity: 1; }
   100% { opacity: 0; }
@@ -205,10 +209,11 @@
 
 /* ---------------- 異動紀錄 ---------------- */
 #panel-log-head {
-  margin: 22px 0 8px;
+  margin: 22px 0 6px;
   font-size: 14px;
-  color: #9a90a6;
-  border-top: 1px solid #3b3346;
+  font-weight: 700;
+  color: #7a6455;
+  border-top: 2px dashed var(--btn-sh);
   padding-top: 14px;
 }
 
@@ -222,18 +227,19 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 7px 2px;
-  border-bottom: 1px solid #322b3c;
+  padding: 7px 4px;
+  border-bottom: 1px solid var(--btn-sh);
   font-size: 14px;
+  font-weight: 600;
 }
 
 .log-delta {
-  font-weight: 700;
-  color: #7bd88f;
+  font-weight: 800;
+  color: #3f7d3f;
   min-width: 3em;
 }
 
-.log-time { color: #9a90a6; }
+.log-time { color: #7a6455; }
 
 .log-row.undone { opacity: 0.5; }
 .log-row.undone .log-delta { text-decoration: line-through; }
@@ -241,9 +247,10 @@
 .log-tag {
   margin-left: auto;
   font-size: 12px;
-  color: #b6abc2;
-  border: 1px solid #4a4457;
-  border-radius: 4px;
+  font-weight: 700;
+  color: #7a6455;
+  border: 2px solid var(--btn-sh);
+  border-radius: 5px;
   padding: 1px 6px;
 }
 
@@ -251,20 +258,25 @@
   margin-left: auto;
   font: inherit;
   font-size: 13px;
-  color: #cabfd6;
-  background: transparent;
-  border: 1px solid #4a4157;
-  border-radius: 5px;
-  padding: 3px 10px;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--btn);
+  border: 2px solid var(--line);
+  border-radius: 6px;
+  padding: 3px 11px 5px;
   cursor: pointer;
+  box-shadow: inset 0 2px 0 var(--cream), 0 2px 0 var(--btn-sh);
 }
 
-.log-undo:hover { background: #3a3346; color: #efe9f2; }
+.log-undo:active {
+  transform: translateY(2px);
+  box-shadow: inset 0 2px 0 var(--cream), 0 0 0 var(--btn-sh);
+}
 
 .log-empty {
-  color: #8c8296;
+  color: #7a6455;
   font-size: 14px;
-  padding: 8px 2px;
+  padding: 8px 4px;
 }
 
 @media (prefers-reduced-motion: reduce) {

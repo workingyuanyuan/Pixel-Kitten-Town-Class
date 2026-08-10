@@ -1,13 +1,33 @@
 /* =====================================================================
- * main.css — 版面與像素縮放
+ * main.css — 版面、像素縮放、遊戲風外觀
  * =====================================================================
+ * 配色直接取樣自 Sprout Lands UI Pack 的實際像素，不是憑感覺調的：
+ *   #f3e5c2 最亮的米白（高光邊）
+ *   #e8cfa6 面板底色
+ *   #dcb98a 按鈕面
+ *   #c49a6c 按鈕陰影／次要邊
+ *   #aa7959 中間調
+ *   #90625d 深色描邊
+ *
  * 關鍵設計：畫面分成兩層畫布。
- *   #stage  像素層，尺寸就是地圖原始像素（預設 960x512），
- *           用 CSS transform 放大「整數」倍，配合 image-rendering: pixelated，
- *           像素邊緣才會銳利。小數倍率會糊。
- *   #labels UI 層，尺寸等於放大後的螢幕像素，中文字直接以原生解析度繪製，
+ *   #stage  像素層，尺寸就是地圖原始像素，用 CSS 放大「整數」倍，
+ *           配合 image-rendering: pixelated，像素邊緣才會銳利。
+ *   #labels UI 層，尺寸等於放大後的螢幕像素，中文字以原生解析度繪製，
  *           投影到教室後排才看得清楚。
  * ===================================================================== */
+
+:root {
+  --cream:   #f3e5c2;
+  --panel:   #e8cfa6;
+  --btn:     #dcb98a;
+  --btn-sh:  #c49a6c;
+  --mid:     #aa7959;
+  --ink:     #4a3b34;
+  --line:    #90625d;
+  --grass:   #6b8f3a;
+  --leaf:    #7bd88f;
+  --gold:    #ffd666;
+}
 
 * { box-sizing: border-box; }
 
@@ -15,10 +35,31 @@ html, body {
   margin: 0;
   padding: 0;
   height: 100%;
-  background: #1b1720;
-  color: #efe9f2;
+  color: var(--ink);
   font-family: "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", system-ui, sans-serif;
   overflow: hidden;
+  background: #2f4a1c;
+}
+
+/* ---------------- 模糊草地背景 ----------------
+   直接拿地圖用的草地圖塊放大再模糊，畫布外的區域就跟草地同一個色系，
+   不會再是一片與綠色地圖打架的深黑。 */
+#bg {
+  position: fixed;
+  inset: -60px;                 /* 往外撐開，避免模糊把邊緣吃掉露出底色 */
+  z-index: -1;
+  background-image: url("../assets/Pixel%20Art%20Top%20Down%20-%20Basic%20v1.2.3/Texture/TX%20Tileset%20Grass.png");
+  background-repeat: repeat;
+  background-size: 512px 512px;
+  filter: blur(26px) saturate(0.85) brightness(0.62);
+}
+
+/* 中央壓暗一點，讓地圖本身跳出來 */
+#bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.18) 0%, rgba(0, 0, 0, 0.52) 100%);
 }
 
 #app {
@@ -36,42 +77,119 @@ html, body {
   height: 48px;
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 0 20px;
-  background: #241f2b;
-  border-bottom: 1px solid #352f3e;
+  gap: 12px;
+  padding: 0 16px;
+  color: var(--ink);
+  background: var(--panel);
+  border-bottom: 3px solid var(--line);
+  box-shadow: inset 0 2px 0 var(--cream), 0 3px 0 rgba(0, 0, 0, 0.25);
 }
 
 #title {
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+  text-shadow: 0 1px 0 var(--cream);
+  margin-right: 4px;
 }
 
 .muted {
-  color: #9a90a6;
+  color: #7a6455;
   font-size: 14px;
 }
+
+#status { font-weight: 600; }
+#save-state { margin-left: auto; min-width: 7em; text-align: right; }
+
+/* ---------------- 遊戲風按鈕 ----------------
+   厚底邊 + 按下時整顆下沉，是最省事也最可靠的「可按」手感。 */
 
 .tbtn {
   font: inherit;
   font-size: 14px;
-  color: #efe9f2;
-  background: #372f42;
-  border: 1px solid #4a4157;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--btn);
+  border: 2px solid var(--line);
   border-radius: 6px;
-  padding: 6px 12px;
+  padding: 5px 12px 7px;
   cursor: pointer;
+  box-shadow: inset 0 2px 0 var(--cream), 0 3px 0 var(--btn-sh);
 }
 
-.tbtn:hover:not(:disabled) { background: #443a52; }
+.tbtn:hover:not(:disabled) { background: #e6c69a; }
+
+.tbtn:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: inset 0 2px 0 var(--cream), 0 0 0 var(--btn-sh);
+}
 
 .tbtn:disabled {
-  opacity: 0.42;
+  opacity: 0.45;
   cursor: default;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.4), 0 3px 0 var(--btn-sh);
 }
 
-#save-state { min-width: 7em; }
+/* 只有圖示的方形按鈕（重新載入） */
+.tbtn-icon {
+  width: 34px;
+  padding: 4px 0 6px;
+  font-size: 18px;
+  line-height: 1;
+  text-align: center;
+}
+
+/* ---------------- 班級選單 ---------------- */
+
+#class-wrap {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+#class-wrap[hidden] { display: none; }
+
+.tlabel {
+  font-size: 13px;
+  font-weight: 700;
+  color: #7a6455;
+}
+
+.tselect {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--btn);
+  border: 2px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 8px 5px;
+  cursor: pointer;
+  box-shadow: inset 0 2px 0 var(--cream), 0 3px 0 var(--btn-sh);
+}
+
+/* ---------------- 連線狀態燈 ---------------- */
+
+.light {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  background: #9d9385;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.light.on {
+  background: #6fc46f;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 0 8px rgba(111, 196, 111, 0.85);
+}
+
+/* 資料檔有問題時是琥珀色。不用紅色 —— 這是會投影出去的畫面。 */
+.light.warn {
+  background: #e0a83c;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 0 8px rgba(224, 168, 60, 0.8);
+}
 
 /* ---------------- 畫布 ---------------- */
 
@@ -89,38 +207,22 @@ html, body {
   grid-area: 1 / 1;
 }
 
+/* 地圖外圍一圈木框，讓小鎮看起來像一塊擺在桌上的地圖 */
 #stage {
   image-rendering: pixelated;
   image-rendering: crisp-edges;
-  /* 寬高由 JS 設定：內部解析度是地圖原始像素，CSS 尺寸是整數倍放大後的值 */
+  border: 4px solid var(--line);
+  border-radius: 4px;
+  box-shadow: 0 0 0 3px var(--mid), 0 10px 28px rgba(0, 0, 0, 0.45);
+  cursor: default;
 }
+
+#stage.on-cat { cursor: pointer; }
 
 #labels {
   pointer-events: none;
+  border: 4px solid transparent;   /* 與 #stage 的框對齊，兩層才不會偏移 */
 }
-
-/* ---------------- 頁尾授權標示 ---------------- */
-
-/* 疊在畫面右下角，不佔版面高度 —— 每一個像素的垂直空間都要留給地圖，
-   否則放大倍率會從 2x 掉到 1x。授權標示仍然全程可見（這是使用條件）。 */
-#credits {
-  position: fixed;
-  right: 10px;
-  bottom: 6px;
-  font-size: 12px;
-  color: #8c8296;
-  background: rgba(27, 23, 32, 0.72);
-  padding: 3px 8px;
-  border-radius: 4px;
-  z-index: 10;
-}
-
-#credits a {
-  color: #a99cb8;
-  text-decoration: none;
-}
-
-#credits a:hover { text-decoration: underline; }
 
 /* ---------------- 錯誤橫幅 ---------------- */
 
@@ -129,22 +231,25 @@ html, body {
   top: 0;
   left: 0;
   right: 0;
-  padding: 14px 20px;
-  background: #7a4a2e;
-  color: #ffeede;
+  padding: 13px 20px;
+  background: #b8894a;
+  color: #2e2216;
+  border-bottom: 3px solid var(--line);
   font-size: 15px;
+  font-weight: 600;
   line-height: 1.6;
   z-index: 50;
   white-space: pre-wrap;
 }
 
-/* 橘色是警告，深紅是錯誤。都不用鮮紅色 —— 那是投影在全班面前的畫面。 */
-#banner.warn  { background: #7a5c2e; }
-#banner.error { background: #6e3535; }
+#banner[hidden] { display: none; }
+
+/* 琥珀是警告，磚紅是錯誤。都不用鮮紅色 —— 那是投影在全班面前的畫面。 */
+#banner.warn  { background: #e0b45c; }
+#banner.error { background: #c07a5e; }
 
 /* ---------------- 復原提示條 ---------------- */
-/* 出現在畫面下方中央，約 3 秒後自己消失。
-   附一顆「取消復原」，讓老師來得及改變主意。 */
+
 #toast {
   position: fixed;
   left: 50%;
@@ -153,12 +258,14 @@ html, body {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 12px 16px 12px 20px;
-  background: #342d3f;
-  border: 1px solid #4a4157;
+  padding: 11px 14px 13px 20px;
+  color: var(--ink);
+  background: var(--panel);
+  border: 3px solid var(--line);
   border-radius: 10px;
-  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.4);
+  box-shadow: inset 0 2px 0 var(--cream), 0 5px 0 var(--btn-sh), 0 12px 26px rgba(0, 0, 0, 0.4);
   font-size: 15px;
+  font-weight: 600;
   z-index: 60;
 }
 
@@ -167,18 +274,20 @@ html, body {
 #toast-action {
   font: inherit;
   font-size: 14px;
-  font-weight: 600;
-  color: #16210f;
-  background: #7bd88f;
-  border: none;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--btn);
+  border: 2px solid var(--line);
   border-radius: 6px;
-  padding: 7px 14px;
+  padding: 5px 13px 7px;
   cursor: pointer;
+  box-shadow: inset 0 2px 0 var(--cream), 0 3px 0 var(--btn-sh);
 }
 
-#toast-action:hover { background: #8fe3a2; }
-
-#banner[hidden] { display: none; }
+#toast-action:active {
+  transform: translateY(3px);
+  box-shadow: inset 0 2px 0 var(--cream), 0 0 0 var(--btn-sh);
+}
 
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }

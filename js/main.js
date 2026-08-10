@@ -14,9 +14,12 @@ const S = {
   scale: 2,
   lastT: 0,
 
-  // --- 階段四 ---
-  editMode: false,   // 預設關閉。關閉時點貓完全沒反應，這是防誤觸的主要機制。
+  // 點貓開面板一律可用。加分仍然要在面板上再按一次，
+  // 所以誤觸最多只是開了一個面板，不會改到分數。
   hoverCat: null,
+
+  classId: null,     // 目前顯示的班級（對應 data/<classId>.json）
+  classes: [],       // 資料夾裡找到的所有班級
 
   // --- 階段三 ---
   dirHandle: null,      // 已授權的 data/ 目錄
@@ -43,6 +46,11 @@ const S = {
 /* 還有沒有東西沒寫進檔案。由序號推導，不另外存旗標。 */
 function isDirty() {
   return S.savedSeq !== S.dataSeq;
+}
+
+/* 目前正在操作哪一個班級。還沒選過就用設定檔裡的預設值。 */
+function currentClassId() {
+  return S.classId || CONFIG.CLASS_ID;
 }
 
 /* ---------------------------------------------------------------------
@@ -87,20 +95,20 @@ async function loadFallbackData() {
     const res = await fetch(`data/${CONFIG.CLASS_ID}.example.json`, { cache: 'no-store' });
     if (res.ok) {
       const parsed = await res.json();
-      S.data = normalizeData(parsed, CONFIG.CLASS_ID).data;
+      S.data = normalizeData(parsed, currentClassId()).data;
       return;
     }
   } catch (e) {
     // 讀不到就往下走
   }
-  S.data = createFreshData(CONFIG.CLASS_ID, CONFIG.PLACEHOLDER_STUDENT_COUNT);
+  S.data = createFreshData(currentClassId(), CONFIG.PLACEHOLDER_STUDENT_COUNT);
 }
 
 async function loadFromDisk() {
-  const res = await readClassFile(S.dirHandle, CONFIG.CLASS_ID);
+  const res = await readClassFile(S.dirHandle, currentClassId());
 
   if (res.status === 'ok') {
-    const { data, warnings } = normalizeData(res.parsed, CONFIG.CLASS_ID);
+    const { data, warnings } = normalizeData(res.parsed, currentClassId());
     S.data = data;
     S.lastRaw = res.raw;
     S.readOnly = false;
@@ -117,11 +125,11 @@ async function loadFromDisk() {
 
   if (res.status === 'missing') {
     // 真的沒有這個檔案才建立。這是安全的：不會覆蓋任何東西。
-    S.data = createFreshData(CONFIG.CLASS_ID, CONFIG.PLACEHOLDER_STUDENT_COUNT);
+    S.data = createFreshData(currentClassId(), CONFIG.PLACEHOLDER_STUDENT_COUNT);
     S.readOnly = false;
     S.lastRaw = null;
     const text = JSON.stringify(S.data, null, 2);
-    await writeClassText(S.dirHandle, CONFIG.CLASS_ID, text);
+    await writeClassText(S.dirHandle, currentClassId(), text);
     S.lastRaw = text;
     S.savedSeq = S.dataSeq;
     hideBanner();
@@ -134,7 +142,7 @@ async function loadFromDisk() {
     S.readOnly = true;
     // 刻意用全 0 分的空白座號，不要退回範例資料 ——
     // 在老師面前顯示一堆不是他班上的分數，比顯示空白更危險。
-    S.data = createFreshData(CONFIG.CLASS_ID, CONFIG.PLACEHOLDER_STUDENT_COUNT);
+    S.data = createFreshData(currentClassId(), CONFIG.PLACEHOLDER_STUDENT_COUNT);
     showBanner(
       `無法解析 ${res.name}：${res.error && res.error.message}\n` +
       `已切換為唯讀狀態，不會寫入任何內容，你的檔案原封不動。\n` +
@@ -178,8 +186,8 @@ async function doSave() {
       const text = JSON.stringify(S.data, null, 2);
 
       // 備份的是「寫入之前」的內容，不是新內容，這樣誤操作才救得回來
-      await makeDailyBackup(S.dirHandle, CONFIG.CLASS_ID, S.lastRaw);
-      await writeClassText(S.dirHandle, CONFIG.CLASS_ID, text);
+      await makeDailyBackup(S.dirHandle, currentClassId(), S.lastRaw);
+      await writeClassText(S.dirHandle, currentClassId(), text);
 
       S.lastRaw = text;
       S.savedSeq = seq;   // 只認這次寫出去的版本，不是「現在」的版本
@@ -303,23 +311,6 @@ function hideToast() {
   document.getElementById('toast').hidden = true;
 }
 
-/* ---------------------------------------------------------------------
- * 編輯模式
- *
- * 關閉時（預設）點貓完全沒反應 —— 這是投影展示狀態。
- * 開啟時貓可以點，畫面邊緣會有一圈低調的顏色提示。
- * ------------------------------------------------------------------- */
-function setEditMode(on) {
-  S.editMode = on;
-  document.getElementById('app').classList.toggle('edit-mode', on);
-  document.getElementById('btn-edit').textContent = `編輯模式：${on ? '開' : '關'}（E）`;
-  if (!on) {
-    closePanel();
-    if (S.hoverCat) { S.hoverCat.hovered = false; S.hoverCat = null; }
-    S.stage.classList.remove('on-cat');
-  }
-}
-
 /* 螢幕座標 -> 地圖內部像素座標 */
 function toMapCoords(clientX, clientY) {
   const r = S.stage.getBoundingClientRect();
@@ -387,18 +378,74 @@ function diagnoseNoPicker() {
 
 function refreshControls() {
   const connected = !!S.dirHandle && !S.readOnly;
-  document.getElementById('btn-connect').textContent =
-    connected ? '已連接資料夾' : (S.pendingHandle ? '確認資料夾授權' : '連接資料夾');
-  document.getElementById('btn-reload').disabled = !S.dirHandle;
-  document.getElementById('btn-edit').disabled = false;
-  document.getElementById('btn-undo').disabled =
-    S.readOnly || !S.data || !lastUndoable(S.data);
 
-  setStatus(
-    `${S.data ? S.data.students.length : 0} 位學生　·　` +
-    `地圖 ${CONFIG.MAP_COLS}×${CONFIG.MAP_ROWS}　·　放大 ${S.scale}x` +
-    (S.readOnly ? '　·　唯讀' : '')
-  );
+  // 連上之後就不再顯示「連接資料夾」，改成班級下拉選單
+  const connectBtn = document.getElementById('btn-connect');
+  const classWrap = document.getElementById('class-wrap');
+  connectBtn.hidden = connected;
+  classWrap.hidden = !connected;
+  if (!connected) {
+    connectBtn.textContent = S.pendingHandle ? '確認資料夾授權' : '連接資料夾';
+  }
+
+  document.getElementById('btn-reload').disabled = !S.dirHandle;
+
+  // 連線狀態改用一顆燈，不佔版面也不用讀字
+  const light = document.getElementById('conn-light');
+  light.className = 'light ' + (connected ? 'on' : (S.dirHandle ? 'warn' : 'off'));
+  light.title = connected ? `已連接：${currentClassId()}`
+    : (S.dirHandle ? '資料檔有問題，目前唯讀' : '尚未連接資料夾');
+
+  setStatus(`${S.data ? S.data.students.length : 0} 位學生`);
+}
+
+/* 把資料夾裡找到的班級填進下拉選單。 */
+function refreshClassList() {
+  const sel = document.getElementById('class-select');
+  sel.innerHTML = '';
+  for (const id of S.classes) {
+    const opt = document.createElement('option');
+    opt.value = id;
+    opt.textContent = id;
+    if (id === currentClassId()) opt.selected = true;
+    sel.appendChild(opt);
+  }
+}
+
+/* 接上一個資料夾之後要做的事：掃出裡面有哪些班級、決定先看哪一班、載入。 */
+async function adoptDirectory() {
+  try {
+    S.classes = await listClasses(S.dirHandle);
+  } catch (e) {
+    console.warn('列出班級失敗', e);
+    S.classes = [];
+  }
+
+  // 設定檔指定的班級優先；沒有的話用資料夾裡的第一個；再沒有就建一個新的
+  if (S.classes.includes(CONFIG.CLASS_ID)) S.classId = CONFIG.CLASS_ID;
+  else if (S.classes.length) S.classId = S.classes[0];
+  else S.classId = CONFIG.CLASS_ID;
+
+  await loadFromDisk();
+  if (!S.classes.includes(currentClassId())) S.classes.push(currentClassId());
+  S.classes.sort();
+
+  refreshClassList();
+  rebuildCats();
+  refreshControls();
+}
+
+/* 切換班級：先把還沒寫完的變更寫掉，再換檔案重建整張地圖。 */
+async function switchClass(id) {
+  if (id === currentClassId()) return;
+  if (isDirty()) await doSave();
+  closePanel();
+  hideToast();
+  S.classId = id;
+  await loadFromDisk();
+  rebuildCats();
+  refreshControls();
+  setSaveState('已切換到 ' + id);
 }
 
 function rebuildCats() {
@@ -468,7 +515,7 @@ async function boot() {
     const { handle, needsGesture } = await restoreDataDir();
     if (handle && !needsGesture) {
       S.dirHandle = handle;
-      await loadFromDisk();
+      await adoptDirectory();
     } else {
       if (handle) S.pendingHandle = handle;
       await loadFallbackData();
@@ -501,9 +548,7 @@ function wireControls() {
         handle = await pickDataDir();
       }
       S.dirHandle = handle;
-      await loadFromDisk();
-      rebuildCats();
-      refreshControls();
+      await adoptDirectory();
       setSaveState(S.readOnly ? '唯讀' : '已連接');
     } catch (e) {
       console.error('連接資料夾失敗', e);
@@ -548,12 +593,12 @@ function wireControls() {
     setSaveState('已重新載入');
   });
 
-  document.getElementById('btn-edit').addEventListener('click', () => setEditMode(!S.editMode));
-  document.getElementById('btn-undo').addEventListener('click', doUndo);
+  document.getElementById('class-select').addEventListener('change', (e) => {
+    switchClass(e.target.value);
+  });
 
   /* --- 滑鼠移到貓上時輕微高亮，並把游標換成手指 --- */
   S.stage.addEventListener('pointermove', (e) => {
-    if (!S.editMode) return;
     const { x, y } = toMapCoords(e.clientX, e.clientY);
     const hit = catAt(S.cats, x, y);
     if (hit !== S.hoverCat) {
@@ -569,9 +614,8 @@ function wireControls() {
     S.stage.classList.remove('on-cat');
   });
 
-  /* --- 點貓開面板。編輯模式關閉時完全不反應。 --- */
+  /* --- 點貓開面板。加分還要在面板上再按一次，所以誤觸不會改到分數。 --- */
   S.stage.addEventListener('click', (e) => {
-    if (!S.editMode) return;
     const { x, y } = toMapCoords(e.clientX, e.clientY);
     const hit = catAt(S.cats, x, y);
     if (hit) openPanel(hit);
@@ -584,19 +628,15 @@ function wireControls() {
     const tag = e.target && e.target.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
-    // Ctrl/Cmd + Z：復原。不需要編輯模式。
+    // Ctrl/Cmd + Z：復原。刻意只在角色面板開著時有效 ——
+    // 復原是針對某一位學生的操作，應該在看得到那隻貓的情況下才做。
     if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
-      doUndo();
+      if (panelIsOpen()) doUndo();
       e.preventDefault();
       return;
     }
     if (e.ctrlKey || e.metaKey || e.altKey) return;  // 其他組合鍵不攔
 
-    if (e.key === 'e' || e.key === 'E') {
-      setEditMode(!S.editMode);
-      e.preventDefault();
-      return;
-    }
     if (e.key === 'Escape') {
       hideToast();
       closePanel();

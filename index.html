@@ -9,16 +9,28 @@
 </head>
 <body>
 
+<!-- 模糊化的草地背景，取自地圖素材本身，讓畫布之外不再是一片死黑 -->
+<div id="bg"></div>
+
 <div id="app">
 
   <header id="toolbar">
     <span id="title"></span>
+
+    <!-- 沒連接資料夾前顯示這顆；連上之後換成班級下拉選單 -->
     <button id="btn-connect" class="tbtn">連接資料夾</button>
-    <button id="btn-reload" class="tbtn" disabled>重新載入檔案</button>
-    <button id="btn-edit" class="tbtn" disabled>編輯模式：關（E）</button>
-    <button id="btn-undo" class="tbtn" disabled title="復原最後一次加分（Ctrl+Z）">復原</button>
-    <span id="save-state" class="muted"></span>
+
+    <label id="class-wrap" hidden>
+      <span class="tlabel">班級</span>
+      <select id="class-select" class="tselect"></select>
+    </label>
+
+    <button id="btn-reload" class="tbtn tbtn-icon" disabled title="重新載入檔案">↻</button>
+
+    <span id="conn-light" class="light" title="尚未連接資料夾"></span>
+
     <span id="status" class="muted"></span>
+    <span id="save-state" class="muted"></span>
   </header>
 
   <!-- 雙層畫布：
@@ -29,12 +41,6 @@
     <canvas id="labels"></canvas>
   </div>
 
-  <!-- 授權標示是素材的使用條件，不是選配。
-       貓的素材來源尚待老師補上，請勿填入未經確認的連結。 -->
-  <footer id="credits">
-    貓：<span id="credit-cat">（素材來源待補，見 CREDITS.md）</span>　·
-    地圖：<a href="https://cainos.itch.io/pixel-art-top-down-basic" target="_blank" rel="noopener">Cainos — Pixel Art Top Down - Basic</a>
-  </footer>
 
 </div>
 
@@ -61,7 +67,6 @@
 
   <div id="panel-awards"></div>
   <div id="panel-maxed-note" hidden>已達最高等級，不再累積分數。</div>
-  <div id="panel-hint">快捷鍵：空白鍵或 Enter 加分　·　Esc 關閉</div>
 
   <div id="panel-levelup"></div>
 
