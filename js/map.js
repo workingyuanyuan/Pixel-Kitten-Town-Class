@@ -130,6 +130,38 @@ function generateMap(seed, cols, rows) {
       }
     }
 
+    /* 院子中央擺一個焦點物件（石壇或石井）。
+     * 官方示範地圖的中庭也是這樣處理的 —— 有焦點，院子才不只是一塊空地。 */
+    const iw = w - 2, ih = h - 2;
+    const candidates = PROPS.CENTERPIECES.filter((p) => p.w <= iw - 1 && p.h <= ih);
+    if (candidates.length) {
+      const p = pick(candidates);
+      const cy = y + 1 + Math.floor((ih - p.h) / 2);
+      const lo = x + 1, hi = x + w - 1 - p.w;
+
+      /* 置中，但要閃開門口那一欄 —— 焦點物件擋住動線就本末倒置了。
+       * 先往左讓，讓不開再往右讓，兩邊都不行才放棄。 */
+      let cx = x + 1 + Math.floor((iw - p.w) / 2);
+      const blocksGate = (px) => gate >= px && gate < px + p.w;
+      if (blocksGate(cx)) {
+        const left = gate - p.w;
+        const right = gate + 1;
+        if (left >= lo) cx = left;
+        else if (right <= hi) cx = right;
+        else cx = -1;
+      }
+
+      if (cx >= lo && cx <= hi) {
+        put('props', [p.col, p.row], cx, cy, p.w, p.h);
+        for (let dr = 0; dr < p.h; dr++) {
+          for (let dc = 0; dc < p.w; dc++) {
+            blocked[cy + dr][cx + dc] = true;
+            solid[cy + dr][cx + dc] = true;
+          }
+        }
+      }
+    }
+
     compounds.push({ x, y, w, h, gate });
     return true;
   }
@@ -216,15 +248,71 @@ function generateMap(seed, cols, rows) {
   }
 
   /* ===================================================================
-   * 3. 邊界灌木
+   * 3. 邊界樹籬
+   *
+   * 不要一圈一模一樣的小灌木 —— 那是複製貼上，不是樹籬。
+   * 用一條低頻的波去調整密度，長出成叢與缺口；再讓大叢灌木往內站一格，
+   * 形成前後兩層，邊界才有厚度與起伏。
    * =================================================================== */
+  const hedgePhase = rand() * Math.PI * 2;
+
+  /* 沿著邊界走一圈的位置參數 t，轉成 0..1 的密度。
+   * 兩個不同週期的正弦疊加，看起來像自然的疏密，而不是規律的鋸齒。 */
+  function hedgeDensity(t) {
+    const a = Math.sin(t * 0.55 + hedgePhase);
+    const b = Math.sin(t * 0.23 + hedgePhase * 1.7);
+    return 0.5 + 0.32 * a + 0.18 * b;   // 約 0..1
+  }
+
+  function plantBush(c, r, allowLarge) {
+    if (allowLarge && rand() < 0.34) {
+      const L = pick(PLANT.BUSHES_LARGE);
+      // 大叢灌木往上長，要確認上方還在圖內
+      if (r - L.h + 1 >= 0) {
+        put('shadowPlant', [L.col, L.row], c, r - L.h + 1, L.w, L.h);
+        put('plant', [L.col, L.row], c, r - L.h + 1, L.w, L.h);
+        return true;
+      }
+    }
+    const b = pick(PLANT.BUSHES);
+    put('shadowPlant', b, c, r);
+    put('plant', b, c, r);
+    return true;
+  }
+
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       if (r !== 0 && r !== rows - 1 && c !== 0 && c !== cols - 1) continue;
       blocked[r][c] = true;
-      if (rand() < 0.85) {
-        put('shadowPlant', pick(PLANT.BUSHES), c, r);
-        put('plant', pick(PLANT.BUSHES), c, r);
+
+      // 沿邊界的行走距離，讓疏密沿著邊界連續變化而不是每格獨立亂數
+      const t = (r === 0) ? c
+        : (c === cols - 1) ? cols + r
+        : (r === rows - 1) ? cols + rows + (cols - c)
+        : cols * 2 + rows + (rows - r);
+
+      const d = hedgeDensity(t);
+      if (d < 0.18) continue;                    // 缺口：讓樹籬有呼吸
+      // 只有下緣與左右緣有往上長的空間，上緣不放大叢（會超出圖外）
+      plantBush(c, r, r !== 0 && d > 0.72);
+    }
+  }
+
+  /* 第二層：邊界往內一格零星補一些矮灌木與雜草，做出厚度。
+   * 這一層會擋路，所以放得很克制，避免吃掉貓的站位。 */
+  for (let r = 1; r < rows - 1; r++) {
+    for (let c = 1; c < cols - 1; c++) {
+      const onInnerRing = (r === 1 || r === rows - 2 || c === 1 || c === cols - 2);
+      if (!onInnerRing || blocked[r][c] || road[r][c] || solid[r][c]) continue;
+      const t = c * 1.3 + r * 0.7;
+      const d = hedgeDensity(t + 3.1);
+      if (d > 0.78 && rand() < 0.45) {
+        const b = pick(PLANT.BUSHES);
+        put('shadowPlant', b, c, r);
+        put('plant', b, c, r);
+        blocked[r][c] = true;
+      } else if (rand() < 0.22) {
+        put('plant', pick(PLANT.WEEDS), c, r);   // 雜草不擋路
       }
     }
   }
@@ -396,10 +484,19 @@ function drawOverlay(ctx, mapData, images, row) {
 
     const img = sheetImage(images, o.sheet);
     if (!img) continue;
+
+    /* 【重要】陰影圖裡的像素是「完全不透明的深褐色」rgba(49,26,18,255)。
+     * 它本來就是設計成半透明疊加的（原作在 Unity 用陰影材質處理）。
+     * 直接畫上去會變成草地上一個個褐色破洞，而不是影子。 */
+    const isShadow = (o.sheet === 'shadowPlant');
+    if (isShadow) ctx.globalAlpha = 0.26;
+
     ctx.drawImage(
       img,
       o.src[0] * T, o.src[1] * T, o.w * T, o.h * T,
       o.col * T, o.row * T, o.w * T, o.h * T
     );
+
+    if (isShadow) ctx.globalAlpha = 1;
   }
 }
