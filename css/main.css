@@ -53,6 +53,32 @@ html, body {
   font-size: 14px;
 }
 
+.tbtn {
+  font: inherit;
+  font-size: 14px;
+  color: #efe9f2;
+  background: #372f42;
+  border: 1px solid #4a4157;
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.tbtn:hover:not(:disabled) { background: #443a52; }
+
+.tbtn:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
+/* 臨時的驗證按鈕，階段四會拿掉 */
+.tbtn-debug {
+  border-style: dashed;
+  color: #d8c9a8;
+}
+
+#save-state { min-width: 7em; }
+
 /* ---------------- 畫布 ---------------- */
 
 #stage-wrap {
@@ -117,6 +143,10 @@ html, body {
   z-index: 50;
   white-space: pre-wrap;
 }
+
+/* 橘色是警告，深紅是錯誤。都不用鮮紅色 —— 那是投影在全班面前的畫面。 */
+#banner.warn  { background: #7a5c2e; }
+#banner.error { background: #6e3535; }
 
 #banner[hidden] { display: none; }
 
