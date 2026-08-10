@@ -14,6 +14,10 @@ const S = {
   scale: 2,
   lastT: 0,
 
+  // --- 階段四 ---
+  editMode: false,   // 預設關閉。關閉時點貓完全沒反應，這是防誤觸的主要機制。
+  hoverCat: null,
+
   // --- 階段三 ---
   dirHandle: null,      // 已授權的 data/ 目錄
   pendingHandle: null,  // 授權還在但需要老師點一下確認
@@ -214,8 +218,38 @@ function award(studentId, delta) {
     playAward(cat, result.applied);
     if (result.leveledUp) playLevelUp(cat);
   }
+  if (panelIsOpen() && panelCat() && panelCat().student.id === studentId) {
+    refreshPanel();
+    if (result.leveledUp) flashLevelUp(result.toLevel);
+  }
   scheduleSave();
   refreshControls();
+}
+
+/* ---------------------------------------------------------------------
+ * 編輯模式
+ *
+ * 關閉時（預設）點貓完全沒反應 —— 這是投影展示狀態。
+ * 開啟時貓可以點，畫面邊緣會有一圈低調的顏色提示。
+ * ------------------------------------------------------------------- */
+function setEditMode(on) {
+  S.editMode = on;
+  document.getElementById('app').classList.toggle('edit-mode', on);
+  document.getElementById('btn-edit').textContent = `編輯模式：${on ? '開' : '關'}（E）`;
+  if (!on) {
+    closePanel();
+    if (S.hoverCat) { S.hoverCat.hovered = false; S.hoverCat = null; }
+    S.stage.classList.remove('on-cat');
+  }
+}
+
+/* 螢幕座標 -> 地圖內部像素座標 */
+function toMapCoords(clientX, clientY) {
+  const r = S.stage.getBoundingClientRect();
+  return {
+    x: (clientX - r.left) / r.width * S.stage.width,
+    y: (clientY - r.top) / r.height * S.stage.height,
+  };
 }
 
 /* ---------------------------------------------------------------------
@@ -279,13 +313,7 @@ function refreshControls() {
   document.getElementById('btn-connect').textContent =
     connected ? '已連接資料夾' : (S.pendingHandle ? '確認資料夾授權' : '連接資料夾');
   document.getElementById('btn-reload').disabled = !S.dirHandle;
-
-  const debugBtn = document.getElementById('btn-debug-award');
-  const s1 = S.data ? S.data.students.find((s) => s.seat === 1) : null;
-  debugBtn.disabled = !connected || !s1 || isMaxed(s1);
-  debugBtn.textContent = s1 && isMaxed(s1)
-    ? '座號 1 已滿分'
-    : '＋1 給座號 1（測試用）';
+  document.getElementById('btn-edit').disabled = false;
 
   setStatus(
     `${S.data ? S.data.students.length : 0} 位學生　·　` +
@@ -306,6 +334,7 @@ function frame(t) {
   S.lastT = t;
 
   updateCats(S.cats, dt, S.map);
+  updatePanel(dt);
 
   const sctx = S.sctx;
   sctx.clearRect(0, 0, S.stage.width, S.stage.height);
@@ -343,6 +372,7 @@ async function boot() {
 
   // 按鈕要最先接上。放在後面的話，只要前面任何一個 await 拋錯，
   // 按鈕就永遠不會有作用，而且症狀是「按了完全沒反應」，最難查。
+  initPanel({ onAward: (id, v) => award(id, v) });
   wireControls();
 
   S.bundle = await loadAllAssets();
@@ -436,10 +466,55 @@ function wireControls() {
     setSaveState('已重新載入');
   });
 
-  document.getElementById('btn-debug-award').addEventListener('click', () => {
-    if (!S.data) return;
-    const s1 = S.data.students.find((s) => s.seat === 1);
-    if (s1) award(s1.id, CONFIG.AWARD_VALUES[0]);
+  document.getElementById('btn-edit').addEventListener('click', () => setEditMode(!S.editMode));
+
+  /* --- 滑鼠移到貓上時輕微高亮，並把游標換成手指 --- */
+  S.stage.addEventListener('pointermove', (e) => {
+    if (!S.editMode) return;
+    const { x, y } = toMapCoords(e.clientX, e.clientY);
+    const hit = catAt(S.cats, x, y);
+    if (hit !== S.hoverCat) {
+      if (S.hoverCat) S.hoverCat.hovered = false;
+      if (hit) hit.hovered = true;
+      S.hoverCat = hit;
+      S.stage.classList.toggle('on-cat', !!hit);
+    }
+  });
+
+  S.stage.addEventListener('pointerleave', () => {
+    if (S.hoverCat) { S.hoverCat.hovered = false; S.hoverCat = null; }
+    S.stage.classList.remove('on-cat');
+  });
+
+  /* --- 點貓開面板。編輯模式關閉時完全不反應。 --- */
+  S.stage.addEventListener('click', (e) => {
+    if (!S.editMode) return;
+    const { x, y } = toMapCoords(e.clientX, e.clientY);
+    const hit = catAt(S.cats, x, y);
+    if (hit) openPanel(hit);
+    else closePanel();   // 點空白處關閉
+  });
+
+  /* --- 快捷鍵 --- */
+  window.addEventListener('keydown', (e) => {
+    // 在輸入框裡打字時不要攔截
+    const tag = e.target && e.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+    if (e.key === 'e' || e.key === 'E') {
+      setEditMode(!S.editMode);
+      e.preventDefault();
+      return;
+    }
+    if (e.key === 'Escape') {
+      closePanel();
+      return;
+    }
+    if ((e.key === ' ' || e.key === 'Enter') && panelIsOpen()) {
+      const cat = panelCat();
+      if (cat && !S.readOnly) award(cat.student.id, CONFIG.AWARD_VALUES[0]);
+      e.preventDefault();
+    }
   });
 
   window.addEventListener('resize', () => { layout(); refreshControls(); });

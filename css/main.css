@@ -71,12 +71,6 @@ html, body {
   cursor: default;
 }
 
-/* 臨時的驗證按鈕，階段四會拿掉 */
-.tbtn-debug {
-  border-style: dashed;
-  color: #d8c9a8;
-}
-
 #save-state { min-width: 7em; }
 
 /* ---------------- 畫布 ---------------- */

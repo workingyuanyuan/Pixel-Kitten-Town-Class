@@ -1,0 +1,260 @@
+/* =====================================================================
+ * panel.css — 角色面板與編輯模式
+ * ===================================================================== */
+
+/* ---------------- 編輯模式的畫面提示 ---------------- */
+/* 低調的一圈顏色，讓老師一眼知道現在點貓會有反應。
+   不要做得太搶眼，這是投影在全班面前的畫面。 */
+#app.edit-mode #stage-wrap::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 3px rgba(123, 216, 143, 0.55);
+  z-index: 5;
+}
+
+#app.edit-mode #stage { cursor: default; }
+#app.edit-mode #stage.on-cat { cursor: pointer; }
+
+/* ---------------- 面板本體 ---------------- */
+#panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 380px;
+  max-width: 92vw;
+  height: 100%;
+  background: #251f2d;
+  border-left: 1px solid #3b3346;
+  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.35);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 24px 24px;
+  overflow-y: auto;
+
+  transform: translateX(100%);
+  transition: transform 200ms ease-out;
+}
+
+#panel.open { transform: translateX(0); }
+#panel[hidden] { display: none; }
+
+#panel-close {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  width: 34px;
+  height: 34px;
+  font-size: 22px;
+  line-height: 1;
+  color: #cabfd6;
+  background: transparent;
+  border: 1px solid #443c50;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+#panel-close:hover { background: #332c3d; }
+
+/* ---------------- 大貓 ---------------- */
+#panel-cat-wrap {
+  align-self: center;
+  margin: 8px 0 4px;
+  padding: 10px;
+  background: #2e2738;
+  border-radius: 12px;
+}
+
+#panel-cat {
+  display: block;
+  image-rendering: pixelated;
+  width: 128px;
+  height: 128px;
+}
+
+/* ---------------- 姓名與等級 ---------------- */
+#panel-name {
+  font-size: 26px;
+  font-weight: 700;
+  text-align: center;
+  margin-top: 6px;
+}
+
+#panel-seat {
+  font-size: 13px;
+  color: #9a90a6;
+  text-align: center;
+  min-height: 1em;
+}
+
+#panel-level-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+#panel-level {
+  font-size: 22px;
+  font-weight: 700;
+  color: #7bd88f;
+  transition: transform 120ms ease-out;
+  transform-origin: center;
+}
+
+#panel-title { font-size: 16px; color: #cabfd6; }
+
+/* ---------------- 進度條 ---------------- */
+#panel-bar {
+  margin-top: 14px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+#panel-bar-fill {
+  height: 100%;
+  width: 0;
+  background: #7bd88f;
+  border-radius: 8px;
+  transition: width 600ms ease-out;
+}
+
+/* 滿級用金色。絕不使用紅色 —— 見實作計畫第 8 節。 */
+#panel-bar-fill.maxed { background: #ffd666; }
+
+#panel-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-size: 14px;
+  color: #b6abc2;
+}
+
+/* ---------------- 加分按鈕 ---------------- */
+#panel-awards {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.award-btn {
+  flex: 1;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  color: #16210f;
+  background: #7bd88f;
+  border: none;
+  border-radius: 10px;
+  padding: 14px 0;
+  cursor: pointer;
+}
+
+.award-primary { font-size: 24px; padding: 18px 0; }
+
+.award-btn:hover:not(:disabled) { background: #8fe3a2; }
+.award-btn:active:not(:disabled) { transform: translateY(1px); }
+
+.award-btn:disabled {
+  background: #4a4457;
+  color: #8d8499;
+  cursor: default;
+}
+
+#panel-maxed-note {
+  margin-top: 10px;
+  font-size: 13px;
+  color: #d8c9a8;
+  text-align: center;
+}
+
+#panel-hint {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #8c8296;
+  text-align: center;
+}
+
+/* ---------------- 升級字樣 ---------------- */
+#panel-levelup {
+  margin-top: 14px;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 700;
+  color: #ffd666;
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+#panel-levelup.show {
+  animation: levelup-in 2000ms ease-out;
+}
+
+@keyframes levelup-in {
+  0%   { opacity: 0; transform: translateY(10px) scale(0.9); }
+  12%  { opacity: 1; transform: translateY(0) scale(1.06); }
+  22%  { transform: translateY(0) scale(1); }
+  78%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* ---------------- 異動紀錄 ---------------- */
+#panel-log-head {
+  margin: 22px 0 8px;
+  font-size: 14px;
+  color: #9a90a6;
+  border-top: 1px solid #3b3346;
+  padding-top: 14px;
+}
+
+#panel-log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.log-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 2px;
+  border-bottom: 1px solid #322b3c;
+  font-size: 14px;
+}
+
+.log-delta {
+  font-weight: 700;
+  color: #7bd88f;
+  min-width: 3em;
+}
+
+.log-time { color: #9a90a6; }
+
+.log-row.undone { opacity: 0.5; }
+.log-row.undone .log-delta { text-decoration: line-through; }
+
+.log-tag {
+  margin-left: auto;
+  font-size: 12px;
+  color: #b6abc2;
+  border: 1px solid #4a4457;
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.log-empty {
+  color: #8c8296;
+  font-size: 14px;
+  padding: 8px 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #panel { transition: none; }
+  #panel-bar-fill { transition: none; }
+  #panel-levelup.show { animation: none; opacity: 1; }
+}

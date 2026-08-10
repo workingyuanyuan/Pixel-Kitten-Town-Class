@@ -309,6 +309,17 @@ function drawCatLabels(lctx, cats, scale) {
     const top = cat.y * scale;                  // 貓所在格子的上緣
     const mid = top + (TILE_SIZE / 2) * scale;  // 格子中心，光環以此為圓心
 
+    // 編輯模式下滑鼠移過來時的高亮。刻意做得很輕，只是提示「這隻可以點」。
+    if (cat.hovered) {
+      lctx.fillStyle = 'rgba(255, 255, 255, 0.13)';
+      lctx.beginPath();
+      lctx.ellipse(cx, mid + 8 * scale, 15 * scale, 7 * scale, 0, 0, Math.PI * 2);
+      lctx.fill();
+      lctx.strokeStyle = 'rgba(123, 216, 143, 0.85)';
+      lctx.lineWidth = Math.max(2, scale);
+      lctx.stroke();
+    }
+
     /* 整個標籤堆疊都排在格子上緣「之外」，絕不覆蓋貓本身：
      *   姓名 + 等級（同一行）
      *   進度條

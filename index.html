@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>班級像素小鎮</title>
 <link rel="stylesheet" href="css/main.css">
+<link rel="stylesheet" href="css/panel.css">
 </head>
 <body>
 
@@ -14,8 +15,7 @@
     <span id="title"></span>
     <button id="btn-connect" class="tbtn">連接資料夾</button>
     <button id="btn-reload" class="tbtn" disabled>重新載入檔案</button>
-    <!-- 階段三的臨時驗證按鈕。階段四做出角色面板之後就會拿掉。 -->
-    <button id="btn-debug-award" class="tbtn tbtn-debug" disabled>＋1 給座號 1（測試用）</button>
+    <button id="btn-edit" class="tbtn" disabled>編輯模式：關（E）</button>
     <span id="save-state" class="muted"></span>
     <span id="status" class="muted"></span>
   </header>
@@ -35,6 +35,37 @@
 
 </div>
 
+<aside id="panel" hidden>
+  <button id="panel-close" title="關閉（Esc）">×</button>
+
+  <div id="panel-cat-wrap">
+    <canvas id="panel-cat" width="128" height="128"></canvas>
+  </div>
+
+  <div id="panel-name"></div>
+  <div id="panel-seat"></div>
+
+  <div id="panel-level-row">
+    <span id="panel-level"></span>
+    <span id="panel-title"></span>
+  </div>
+
+  <div id="panel-bar"><div id="panel-bar-fill"></div></div>
+  <div id="panel-meta">
+    <span id="panel-xp"></span>
+    <span id="panel-next"></span>
+  </div>
+
+  <div id="panel-awards"></div>
+  <div id="panel-maxed-note" hidden>已達最高等級，不再累積分數。</div>
+  <div id="panel-hint">快捷鍵：空白鍵或 Enter 加分　·　Esc 關閉</div>
+
+  <div id="panel-levelup"></div>
+
+  <div id="panel-log-head">最近的紀錄</div>
+  <ul id="panel-log"></ul>
+</aside>
+
 <div id="banner" hidden></div>
 
 <script src="js/config.js"></script>
@@ -45,6 +76,7 @@
 <script src="js/model.js"></script>
 <script src="js/map.js"></script>
 <script src="js/cats.js"></script>
+<script src="js/panel.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>
