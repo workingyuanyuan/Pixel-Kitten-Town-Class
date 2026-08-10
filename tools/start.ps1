@@ -108,7 +108,33 @@ Write-Host ''
 Write-Host '  ※ 使用完畢請直接關閉這個視窗。'
 Write-Host ''
 
-Start-Process $url
+# --- 用 Chrome 或 Edge 開啟 ---------------------------------------------
+# 這個程式需要 File System Access API 才能把分數寫回檔案，而該 API 只有
+# Chrome 系列支援。直接用預設瀏覽器開的話，萬一預設是 Firefox，
+# 「連接資料夾」會完全沒反應且看不出原因。所以這裡明確指定。
+$browser = $null
+$candidates = @(
+    (Join-Path $env:ProgramFiles 'Google\Chrome\Application\chrome.exe'),
+    (Join-Path ${env:ProgramFiles(x86)} 'Google\Chrome\Application\chrome.exe'),
+    (Join-Path $env:LOCALAPPDATA 'Google\Chrome\Application\chrome.exe'),
+    (Join-Path $env:ProgramFiles 'Microsoft\Edge\Application\msedge.exe'),
+    (Join-Path ${env:ProgramFiles(x86)} 'Microsoft\Edge\Application\msedge.exe')
+)
+foreach ($c in $candidates) {
+    if ($c -and (Test-Path $c)) { $browser = $c; break }
+}
+
+if ($browser) {
+    Write-Host ("  瀏覽器：" + (Split-Path $browser -Leaf))
+    Start-Process -FilePath $browser -ArgumentList $url
+} else {
+    Write-Host ''
+    Write-Host '  找不到 Chrome 或 Edge，改用預設瀏覽器開啟。' -ForegroundColor Yellow
+    Write-Host '  ※ 若預設瀏覽器不是 Chrome 或 Edge，「連接資料夾」會無法使用，'
+    Write-Host '    因為儲存分數所需的功能只有 Chrome 系列支援。'
+    Write-Host ''
+    Start-Process $url
+}
 
 # 這個視窗關掉就等於關掉伺服器
 try {

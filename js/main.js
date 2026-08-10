@@ -206,6 +206,40 @@ function hideBanner() {
   document.getElementById('banner').hidden = true;
 }
 
+/* ---------------------------------------------------------------------
+ * 為什麼叫不出資料夾選擇視窗？
+ *
+ * 這個功能有兩個硬性前提，缺一個都會讓按鈕毫無反應：
+ *   1. 瀏覽器必須是 Chrome 系列（Firefox、Safari 都沒有這個 API）
+ *   2. 網頁必須從 http://localhost 開啟，不能是直接雙擊 index.html
+ *
+ * 與其讓老師對著沒反應的按鈕發呆，不如直接告訴他是哪一個前提沒滿足。
+ * ------------------------------------------------------------------- */
+function diagnoseNoPicker() {
+  const ua = navigator.userAgent;
+  const isFirefox = /Firefox\//.test(ua);
+  const isSafari = /Safari\//.test(ua) && !/Chrome|Chromium|Edg\//.test(ua);
+  const proto = location.protocol;
+
+  let why;
+  if (proto === 'file:') {
+    why = '你是直接雙擊 index.html 打開的（網址列開頭是 file://）。\n' +
+          '這樣瀏覽器不允許存取檔案。請關掉這個分頁，改成雙擊「啟動.bat」。';
+  } else if (isFirefox) {
+    why = '目前這個瀏覽器是 Firefox，它沒有這個功能。\n請改用 Chrome 或 Edge 開啟。';
+  } else if (isSafari) {
+    why = '目前這個瀏覽器是 Safari，它沒有這個功能。\n請改用 Chrome 或 Edge 開啟。';
+  } else if (!window.isSecureContext) {
+    why = `目前的網址（${location.origin}）不是安全來源，瀏覽器因此禁止存取檔案。\n` +
+          '請用「啟動.bat」開啟，網址應該是 http://localhost:8173 這樣的形式。';
+  } else {
+    why = '這個瀏覽器沒有提供 File System Access API。\n請改用最新版的 Chrome 或 Edge。';
+  }
+
+  return '無法開啟資料夾選擇視窗。\n\n' + why +
+         `\n\n技術資訊：網址 ${proto}//${location.host}　·　瀏覽器 ${ua.slice(0, 90)}`;
+}
+
 function refreshControls() {
   const connected = !!S.dirHandle && !S.readOnly;
   document.getElementById('btn-connect').textContent =
@@ -273,15 +307,16 @@ async function boot() {
 
   document.getElementById('title').textContent = CONFIG.TITLE || '';
 
+  // 按鈕要最先接上。放在後面的話，只要前面任何一個 await 拋錯，
+  // 按鈕就永遠不會有作用，而且症狀是「按了完全沒反應」，最難查。
+  wireControls();
+
   S.bundle = await loadAllAssets();
   S.map = generateMap(CONFIG.MAP_SEED, CONFIG.MAP_COLS, CONFIG.MAP_ROWS);
   layout();
 
   if (!fsaSupported()) {
-    showBanner(
-      '這個瀏覽器不支援本機檔案存取（File System Access API），無法把分數寫回檔案。\n' +
-      '請改用最新版的 Chrome 或 Edge 開啟。目前可以瀏覽畫面，但一切都是唯讀的。', 'error'
-    );
+    showBanner(diagnoseNoPicker(), 'error');
     await loadFallbackData();
   } else {
     const { handle, needsGesture } = await restoreDataDir();
@@ -297,7 +332,6 @@ async function boot() {
 
   rebuildCats();
   refreshControls();
-  wireControls();
 
   S.lastT = performance.now();
   requestAnimationFrame(frame);
@@ -305,6 +339,11 @@ async function boot() {
 
 function wireControls() {
   document.getElementById('btn-connect').addEventListener('click', async () => {
+    // 這裡不能靜靜地失敗。老師按了按鈕卻什麼都沒發生，是最難查的狀況。
+    if (!fsaSupported()) {
+      showBanner(diagnoseNoPicker(), 'error');
+      return;
+    }
     try {
       let handle;
       if (S.pendingHandle) {
@@ -341,6 +380,7 @@ function wireControls() {
   });
 
   document.getElementById('btn-debug-award').addEventListener('click', () => {
+    if (!S.data) return;
     const s1 = S.data.students.find((s) => s.seat === 1);
     if (s1) award(s1.id, CONFIG.AWARD_VALUES[0]);
   });
@@ -352,4 +392,11 @@ function wireControls() {
   });
 }
 
-window.addEventListener('DOMContentLoaded', boot);
+window.addEventListener('DOMContentLoaded', () => {
+  boot().catch((e) => {
+    // 啟動失敗一定要看得見，不要只留在主控台
+    console.error('啟動失敗', e);
+    showBanner('程式啟動時發生錯誤：' + (e && e.message) +
+      '\n請把這行訊息告訴開發者。', 'error');
+  });
+});
