@@ -156,12 +156,15 @@ async function readClassFile(dirHandle, classId) {
  * createWritable() 依規格是寫進暫存檔、close() 時才原子性地取代原檔，
  * 所以寫到一半被中斷不會留下半截的壞檔案。
  * ------------------------------------------------------------------- */
-async function writeClassFile(dirHandle, classId, data) {
+/* 收的是「已經序列化好的字串」而不是物件。
+ * 這一點很重要：序列化必須由呼叫端在同步的那一瞬間完成並記下版本，
+ * 才能判斷寫入期間有沒有新的變更被漏掉。 */
+async function writeClassText(dirHandle, classId, text) {
   const name = `${classId}.json`;
   const fileHandle = await dirHandle.getFileHandle(name, { create: true });
   const writable = await fileHandle.createWritable();
   try {
-    await writable.write(JSON.stringify(data, null, 2));
+    await writable.write(text);
   } finally {
     await writable.close();
   }

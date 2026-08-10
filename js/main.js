@@ -20,10 +20,26 @@ const S = {
   data: null,           // 記憶體中的資料（檔案才是真相）
   lastRaw: null,        // 上次讀到／寫出的檔案內容，備份用
   readOnly: true,       // 尚未連接資料夾、或檔案壞掉時為 true
-  dirty: false,         // 有尚未寫入的變更
   saveTimer: null,
   saving: false,
+
+  /* 存檔的版本序號。
+   *
+   * 這兩個數字是防資料遺失的關鍵。寫檔中間有好幾個 await，老師在那段時間
+   * 完全可能又按了一次加分。如果只用一個 dirty 布林旗標，寫完之後把它清成
+   * false，就會把寫入期間進來的變更一起清掉 —— 畫面上分數有變、檔案裡卻沒有，
+   * 重整之後那一分就消失了。
+   *
+   * 改法：每次變更 dataSeq +1；寫入前記下當下的序號，寫完才把 savedSeq 設成
+   * 那個值。只要 savedSeq 還沒追上 dataSeq，就代表有東西還沒寫，再寫一輪。 */
+  dataSeq: 0,
+  savedSeq: 0,
 };
+
+/* 還有沒有東西沒寫進檔案。由序號推導，不另外存旗標。 */
+function isDirty() {
+  return S.savedSeq !== S.dataSeq;
+}
 
 /* ---------------------------------------------------------------------
  * 縮放：取「塞得下」的最大整數倍率。小數倍率會讓像素糊掉。
@@ -84,7 +100,7 @@ async function loadFromDisk() {
     S.data = data;
     S.lastRaw = res.raw;
     S.readOnly = false;
-    S.dirty = false;
+    S.savedSeq = S.dataSeq;   // 剛從檔案讀進來，記憶體與檔案一致
     hideBanner();
     if (warnings.length) {
       showBanner(
@@ -100,8 +116,10 @@ async function loadFromDisk() {
     S.data = createFreshData(CONFIG.CLASS_ID, CONFIG.PLACEHOLDER_STUDENT_COUNT);
     S.readOnly = false;
     S.lastRaw = null;
-    await writeClassFile(S.dirHandle, CONFIG.CLASS_ID, S.data);
-    S.lastRaw = JSON.stringify(S.data, null, 2);
+    const text = JSON.stringify(S.data, null, 2);
+    await writeClassText(S.dirHandle, CONFIG.CLASS_ID, text);
+    S.lastRaw = text;
+    S.savedSeq = S.dataSeq;
     hideBanner();
     console.info(`找不到 ${res.name}，已建立新檔（${CONFIG.PLACEHOLDER_STUDENT_COUNT} 個座號）。`);
     return true;
@@ -131,27 +149,43 @@ async function loadFromDisk() {
  * ------------------------------------------------------------------- */
 function scheduleSave() {
   if (S.readOnly || !S.dirHandle) return;
-  S.dirty = true;
+  S.dataSeq++;
   setSaveState('未存檔…');
   if (S.saveTimer) clearTimeout(S.saveTimer);
   S.saveTimer = setTimeout(() => { S.saveTimer = null; doSave(); }, CONFIG.SAVE_DEBOUNCE_MS);
 }
 
 async function doSave() {
-  if (S.readOnly || !S.dirHandle || !S.dirty || S.saving) return;
+  if (S.readOnly || !S.dirHandle) return;
+
+  // 已經有一輪寫入在跑了。不要平行寫同一個檔案，也不要就這樣算了 ——
+  // 那一輪結束前會自己再檢查一次序號，把這次的變更一併寫掉。
+  if (S.saving) return;
+  if (!isDirty()) return;
+
   S.saving = true;
   setSaveState('存檔中…');
   try {
-    // 備份的是「寫入之前」的內容，不是新內容，這樣誤操作才救得回來
-    await makeDailyBackup(S.dirHandle, CONFIG.CLASS_ID, S.lastRaw);
-    await writeClassFile(S.dirHandle, CONFIG.CLASS_ID, S.data);
-    S.lastRaw = JSON.stringify(S.data, null, 2);
-    S.dirty = false;
+    // 只要序號還沒追上就繼續寫。老師在寫入過程中又按了加分時，
+    // 這個迴圈會再跑一輪，不會漏掉。
+    while (isDirty()) {
+      const seq = S.dataSeq;
+      // 在同步的這一瞬間定版，之後 S.data 再怎麼變都跟這次寫入無關
+      const text = JSON.stringify(S.data, null, 2);
+
+      // 備份的是「寫入之前」的內容，不是新內容，這樣誤操作才救得回來
+      await makeDailyBackup(S.dirHandle, CONFIG.CLASS_ID, S.lastRaw);
+      await writeClassText(S.dirHandle, CONFIG.CLASS_ID, text);
+
+      S.lastRaw = text;
+      S.savedSeq = seq;   // 只認這次寫出去的版本，不是「現在」的版本
+    }
     setSaveState('已存檔 ' + new Date().toLocaleTimeString('zh-TW', { hour12: false }));
   } catch (e) {
     console.error('寫入失敗', e);
     setSaveState('存檔失敗');
-    showBanner('寫入檔案失敗：' + (e && e.message) + '\n變更仍在記憶體中，請重新連接資料夾後再試。', 'error');
+    showBanner('寫入檔案失敗：' + (e && e.message) +
+      '\n變更仍在記憶體中，尚未寫入檔案。請重新連接資料夾後再試一次。', 'error');
   } finally {
     S.saving = false;
   }
@@ -160,7 +194,7 @@ async function doSave() {
 /* 關頁前務必把還沒寫的變更擠出去。 */
 function flushOnExit() {
   if (S.saveTimer) { clearTimeout(S.saveTimer); S.saveTimer = null; }
-  if (S.dirty) doSave();
+  if (isDirty()) doSave();
 }
 
 /* ---------------------------------------------------------------------
@@ -390,10 +424,10 @@ function wireControls() {
   });
 
   document.getElementById('btn-reload').addEventListener('click', async () => {
-    if (S.dirty) {
+    if (isDirty()) {
       const go = confirm('有尚未寫入的變更，重新載入會捨棄它們。要繼續嗎？');
       if (!go) return;
-      S.dirty = false;
+      S.savedSeq = S.dataSeq;   // 明確捨棄
       if (S.saveTimer) { clearTimeout(S.saveTimer); S.saveTimer = null; }
     }
     await loadFromDisk();
