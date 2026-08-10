@@ -20,6 +20,7 @@ const S = {
 
   classId: null,     // 目前顯示的班級（對應 data/<classId>.json）
   classes: [],       // 資料夾裡找到的所有班級
+  mapDirty: false,   // 地圖有未存檔的編輯
 
   // --- 階段三 ---
   dirHandle: null,      // 已授權的 data/ 目錄
@@ -46,6 +47,47 @@ const S = {
 /* 還有沒有東西沒寫進檔案。由序號推導，不另外存旗標。 */
 function isDirty() {
   return S.savedSeq !== S.dataSeq;
+}
+
+/* 地圖存在 data/map-<班級代碼>.json，跟成績檔分開。
+ * 每個班級可以有自己的小鎮。 */
+function mapFileId() { return 'map-' + currentClassId(); }
+
+/* 載入這個班級的地圖：有存檔就用存檔，沒有就用程式產生的預設地圖。 */
+async function loadMap() {
+  if (S.dirHandle) {
+    try {
+      const res = await readClassFile(S.dirHandle, mapFileId());
+      if (res.status === 'ok') {
+        S.map = deserializeMap(res.parsed);
+        S.mapDirty = false;
+        return;
+      }
+      if (res.status === 'corrupt') {
+        console.warn(`地圖檔 ${res.name} 解析失敗，改用預設地圖。你的檔案沒有被動過。`);
+      }
+    } catch (e) {
+      console.warn('讀取地圖檔失敗，改用預設地圖。', e);
+    }
+  }
+  S.map = generateMap(CONFIG.MAP_SEED, CONFIG.MAP_COLS, CONFIG.MAP_ROWS);
+  S.mapDirty = false;
+}
+
+async function saveMap() {
+  if (!S.dirHandle) {
+    showBanner('尚未連接資料夾，無法儲存地圖。請先按工具列的「連接資料夾」。', 'warn');
+    return;
+  }
+  try {
+    const text = JSON.stringify(serializeMap(S.map), null, 2);
+    await writeClassText(S.dirHandle, mapFileId(), text);
+    S.mapDirty = false;
+    setSaveState('地圖已儲存');
+  } catch (e) {
+    console.error('儲存地圖失敗', e);
+    showBanner('儲存地圖失敗：' + (e && e.message), 'error');
+  }
 }
 
 /* 目前正在操作哪一個班級。還沒選過就用設定檔裡的預設值。 */
@@ -427,6 +469,7 @@ async function adoptDirectory() {
   else S.classId = CONFIG.CLASS_ID;
 
   await loadFromDisk();
+  await loadMap();
   if (!S.classes.includes(currentClassId())) S.classes.push(currentClassId());
   S.classes.sort();
 
@@ -443,6 +486,7 @@ async function switchClass(id) {
   hideToast();
   S.classId = id;
   await loadFromDisk();
+  await loadMap();
   rebuildCats();
   refreshControls();
   setSaveState('已切換到 ' + id);
@@ -481,6 +525,7 @@ function frame(t) {
   const lctx = S.lctx;
   lctx.clearRect(0, 0, S.labels.width, S.labels.height);
   drawCatLabels(lctx, S.cats, S.scale);
+  drawEditorOverlay(lctx, S.scale);
 
   requestAnimationFrame(frame);
 }
@@ -507,6 +552,16 @@ async function boot() {
   S.bundle = await loadAllAssets();
   S.map = generateMap(CONFIG.MAP_SEED, CONFIG.MAP_COLS, CONFIG.MAP_ROWS);
   layout();
+  initMapEdit({
+    onChange: () => { S.mapDirty = true; rebuildCats(); setSaveState('地圖未存檔…'); },
+    onSave: () => saveMap(),
+    onRegenerate: () => {
+      S.map = generateMap(Date.now() & 0x7fffffff, CONFIG.MAP_COLS, CONFIG.MAP_ROWS);
+      S.mapDirty = true;
+      rebuildCats();
+      setSaveState('地圖未存檔…');
+    },
+  });
 
   if (!fsaSupported()) {
     showBanner(diagnoseNoPicker(), 'error');
@@ -598,7 +653,14 @@ function wireControls() {
   });
 
   /* --- 滑鼠移到貓上時輕微高亮，並把游標換成手指 --- */
+  document.getElementById('btn-mapedit').addEventListener('click', () => setMapEdit(!mapEditActive()));
+
+  S.stage.addEventListener('contextmenu', (e) => { if (mapEditActive()) e.preventDefault(); });
+  S.stage.addEventListener('pointerdown', (e) => { if (mapEditActive()) editPointerDown(e); });
+  window.addEventListener('pointerup', () => { if (mapEditActive()) editPointerUp(); });
+
   S.stage.addEventListener('pointermove', (e) => {
+    if (mapEditActive()) { editPointerMove(e); return; }
     const { x, y } = toMapCoords(e.clientX, e.clientY);
     const hit = catAt(S.cats, x, y);
     if (hit !== S.hoverCat) {
@@ -616,6 +678,7 @@ function wireControls() {
 
   /* --- 點貓開面板。加分還要在面板上再按一次，所以誤觸不會改到分數。 --- */
   S.stage.addEventListener('click', (e) => {
+    if (mapEditActive()) return;        // 編輯模式由 pointerdown 處理
     const { x, y } = toMapCoords(e.clientX, e.clientY);
     const hit = catAt(S.cats, x, y);
     if (hit) openPanel(hit);
@@ -627,6 +690,9 @@ function wireControls() {
     // 在輸入框裡打字時不要攔截
     const tag = e.target && e.target.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+    // 編輯模式的快捷鍵優先（Delete、Ctrl+S、Esc）
+    if (editKeyDown(e)) return;
 
     // Ctrl/Cmd + Z：復原。刻意只在角色面板開著時有效 ——
     // 復原是針對某一位學生的操作，應該在看得到那隻貓的情況下才做。

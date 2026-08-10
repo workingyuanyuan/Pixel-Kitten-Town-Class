@@ -120,6 +120,7 @@ async function listClasses(dirHandle) {
     if (handle.kind !== 'file') continue;
     if (!name.endsWith('.json')) continue;
     if (name.endsWith('.example.json')) continue;
+    if (name.startsWith('map-')) continue;   // 地圖檔不是班級
     ids.push(name.slice(0, -'.json'.length));
   }
   ids.sort();

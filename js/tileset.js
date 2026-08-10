@@ -22,6 +22,32 @@
  *   w, h             它在地圖上佔幾格（繪製時於此範圍內置中、貼齊底部）
  * ===================================================================== */
 
+/* =====================================================================
+ * 編輯器用的統一目錄
+ * =====================================================================
+ * 地圖編輯器、存檔格式、繪製流程都靠這張表對應。
+ * 一個物件在存檔裡只會記成 { t: 種類, i: 第幾個, c: 欄, r: 列 }，
+ * 其餘資訊（圖集、尺寸、是否擋路、是否有影子）全部從這裡查。
+ *
+ * 之所以能這樣做，是因為所有物件都已經改用像素精確矩形，
+ * 每一項都是一個完整、可獨立擺放的個體。
+ * ===================================================================== */
+const OBJECT_KINDS = {
+  tree:     { label: '樹',       sheet: 'plant',  shadow: true,  blocks: 'trunk' },
+  bush:     { label: '灌木',     sheet: 'plant',  shadow: true,  blocks: 'all'   },
+  bushL:    { label: '大灌木',   sheet: 'plant',  shadow: true,  blocks: 'all'   },
+  weed:     { label: '草叢',     sheet: 'plant',  shadow: false, blocks: 'none'  },
+  prop:     { label: '道具',     sheet: 'props',  shadow: false, blocks: 'all'   },
+  centre:   { label: '中庭物件', sheet: 'props',  shadow: false, blocks: 'all'   },
+  pebble:   { label: '碎石',     sheet: 'props',  shadow: false, blocks: 'none'  },
+  face:     { label: '擋土牆',   sheet: 'struct', shadow: false, blocks: 'all'   },
+  stairs:   { label: '階梯',     sheet: 'struct', shadow: false, blocks: 'none'  },
+  wall:     { label: '院牆',     sheet: 'wall',   shadow: false, blocks: 'all', tiled: true },
+};
+
+/* 種類 -> 可選項目清單。在檔案最後面填入（因為要等常數都宣告完）。 */
+const OBJECT_LISTS = {};
+
 /* ---------------------------------------------------------------------
  * 草地 TX Tileset Grass.png（8 x 8 格）— 這是真正的地磚，用格座標
  * ------------------------------------------------------------------- */
@@ -184,3 +210,50 @@ const PROPS = {
     { sx: 289, sy: 486, sw: 31, sh: 19, w: 1, h: 1 },
   ],
 };
+
+/* ---------------------------------------------------------------------
+ * 院牆的可擺放圖章
+ *
+ * 院牆是地磚性質的（用格座標），所以另外列成一組讓編輯器逐塊擺。
+ * 南面牆要「牆頂」加「正面」兩塊上下相疊才對，這一點在標籤裡講清楚，
+ * 免得擺出一道沒有立面、看起來像一條灰線的牆。
+ * ------------------------------------------------------------------- */
+const WALL_STAMPS = [
+  { label: '左上角',     src: WALL.TL },
+  { label: '上緣',       src: WALL.T  },
+  { label: '右上角',     src: WALL.TR },
+  { label: '左側',       src: WALL.L  },
+  { label: '右側',       src: WALL.R  },
+  { label: '左下角(頂)', src: WALL.BL },
+  { label: '下緣(頂)',   src: WALL.B  },
+  { label: '右下角(頂)', src: WALL.BR },
+  { label: '左下角(面)', src: WALL.BLF },
+  { label: '下緣(面)',   src: WALL.BF  },
+  { label: '右下角(面)', src: WALL.BRF },
+];
+
+/* 種類 -> 項目清單。編輯器的調色盤與存檔的索引都以這裡為準，
+ * 所以清單的順序一旦有人用它存過檔就不要再改動，否則舊地圖會錯位。 */
+OBJECT_LISTS.tree   = PLANT.TREES;
+OBJECT_LISTS.bush   = PLANT.BUSHES;
+OBJECT_LISTS.bushL  = PLANT.BUSHES_LARGE;
+OBJECT_LISTS.weed   = PLANT.WEEDS;
+OBJECT_LISTS.prop   = PROPS.SOLID;
+OBJECT_LISTS.centre = PROPS.CENTERPIECES;
+OBJECT_LISTS.pebble = PROPS.PEBBLES;
+OBJECT_LISTS.face   = STRUCT.WALL_FACE;
+OBJECT_LISTS.stairs = STRUCT.STAIRS;
+OBJECT_LISTS.wall   = WALL_STAMPS;
+
+/* ---------------------------------------------------------------------
+ * 地面筆刷
+ * ------------------------------------------------------------------- */
+const GROUND_BRUSHES = [
+  { id: 'grass',   label: '草地',       sheet: 'grass', pool: [GRASS.PLAIN] },
+  { id: 'tuft',    label: '草叢地',     sheet: 'grass', pool: GRASS.TUFT },
+  { id: 'flower',  label: '花草地',     sheet: 'grass', pool: GRASS.FLOWER },
+  { id: 'dense',   label: '石板(密)',   sheet: 'grass', pool: GRASS.BLEND_DENSE },
+  { id: 'medium',  label: '石板(中)',   sheet: 'grass', pool: GRASS.BLEND_MEDIUM },
+  { id: 'sparse',  label: '石板(疏)',   sheet: 'grass', pool: GRASS.BLEND_SPARSE },
+  { id: 'stone',   label: '石地板',     sheet: 'stone', pool: STONE_FLOOR.SOLID },
+];

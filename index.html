@@ -26,6 +26,7 @@
     </label>
 
     <button id="btn-reload" class="tbtn tbtn-icon" disabled title="重新載入檔案">↻</button>
+    <button id="btn-mapedit" class="tbtn tbtn-icon" title="地圖編輯">✎</button>
 
     <span id="conn-light" class="light" title="尚未連接資料夾"></span>
 
@@ -43,6 +44,17 @@
 
 
 </div>
+
+<aside id="editor" hidden>
+  <div id="ed-bar">
+    <span id="ed-title">地圖編輯</span>
+    <button id="ed-regen" class="tbtn">重新產生</button>
+    <button id="ed-save" class="tbtn">儲存地圖</button>
+    <button id="ed-close" class="tbtn tbtn-icon">×</button>
+  </div>
+  <div id="ed-hint"></div>
+  <div id="ed-palette"></div>
+</aside>
 
 <aside id="panel" hidden>
   <button id="panel-close" title="關閉（Esc）">×</button>
@@ -90,6 +102,7 @@
 <script src="js/map.js"></script>
 <script src="js/cats.js"></script>
 <script src="js/panel.js"></script>
+<script src="js/mapedit.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>
