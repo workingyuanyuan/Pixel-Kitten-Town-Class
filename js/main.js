@@ -227,6 +227,83 @@ function award(studentId, delta) {
 }
 
 /* ---------------------------------------------------------------------
+ * 復原
+ *
+ * 復原不需要編輯模式，也不需要先點貓 —— 老師發現按錯的時候，
+ * 通常已經在講下一件事了，這時候要能直接 Ctrl+Z。
+ * ------------------------------------------------------------------- */
+function studentLabel(s) {
+  return s.name && s.name.trim() ? s.name : '座號 ' + s.seat;
+}
+
+function doUndo() {
+  if (S.readOnly) return;
+  const target = lastUndoable(S.data);
+  if (!target) {
+    setSaveState('沒有可以復原的加分');
+    return;
+  }
+  applyUndo(target.id);
+}
+
+/* 復原指定的一筆。面板裡每筆紀錄旁邊的復原鈕也走這裡，
+ * 用來處理「加錯人」而不是「多加一次」。 */
+function applyUndo(eventId) {
+  if (S.readOnly) return;
+  const r = undoEvent(S.data, eventId);
+  if (!r.ok) return;
+
+  afterMutation(r.student.id);
+  showToast(
+    `已復原：${studentLabel(r.student)} ＋${r.original.delta}`,
+    '取消復原',
+    () => {
+      const c = cancelUndo(S.data, r.undoEvent.id);
+      if (c.ok) {
+        afterMutation(c.student.id);
+        showToast(`已取消復原：${studentLabel(c.student)} ＋${c.cancelEvent.delta}`, null, null);
+      }
+    }
+  );
+}
+
+/* 資料改動之後統一要做的事：更新畫面、面板、存檔。 */
+function afterMutation(studentId) {
+  const cat = S.cats.find((c) => c.student.id === studentId);
+  // 降級不做任何懲罰表現，安靜地改數字就好（見實作計畫第 7 節）。
+  if (cat) cat.levelFx = 0;
+  if (panelIsOpen() && panelCat() && panelCat().student.id === studentId) refreshPanel();
+  scheduleSave();
+  refreshControls();
+}
+
+let toastTimer = null;
+
+function showToast(text, actionLabel, onAction) {
+  const el = document.getElementById('toast');
+  const btn = document.getElementById('toast-action');
+  document.getElementById('toast-text').textContent = text;
+
+  if (actionLabel && onAction) {
+    btn.hidden = false;
+    btn.textContent = actionLabel;
+    btn.onclick = () => { hideToast(); onAction(); };
+  } else {
+    btn.hidden = true;
+    btn.onclick = null;
+  }
+
+  el.hidden = false;
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(hideToast, 3200);
+}
+
+function hideToast() {
+  if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; }
+  document.getElementById('toast').hidden = true;
+}
+
+/* ---------------------------------------------------------------------
  * 編輯模式
  *
  * 關閉時（預設）點貓完全沒反應 —— 這是投影展示狀態。
@@ -314,6 +391,8 @@ function refreshControls() {
     connected ? '已連接資料夾' : (S.pendingHandle ? '確認資料夾授權' : '連接資料夾');
   document.getElementById('btn-reload').disabled = !S.dirHandle;
   document.getElementById('btn-edit').disabled = false;
+  document.getElementById('btn-undo').disabled =
+    S.readOnly || !S.data || !lastUndoable(S.data);
 
   setStatus(
     `${S.data ? S.data.students.length : 0} 位學生　·　` +
@@ -372,7 +451,10 @@ async function boot() {
 
   // 按鈕要最先接上。放在後面的話，只要前面任何一個 await 拋錯，
   // 按鈕就永遠不會有作用，而且症狀是「按了完全沒反應」，最難查。
-  initPanel({ onAward: (id, v) => award(id, v) });
+  initPanel({
+    onAward: (id, v) => award(id, v),
+    onUndo: (eventId) => applyUndo(eventId),
+  });
   wireControls();
 
   S.bundle = await loadAllAssets();
@@ -467,6 +549,7 @@ function wireControls() {
   });
 
   document.getElementById('btn-edit').addEventListener('click', () => setEditMode(!S.editMode));
+  document.getElementById('btn-undo').addEventListener('click', doUndo);
 
   /* --- 滑鼠移到貓上時輕微高亮，並把游標換成手指 --- */
   S.stage.addEventListener('pointermove', (e) => {
@@ -501,12 +584,21 @@ function wireControls() {
     const tag = e.target && e.target.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
+    // Ctrl/Cmd + Z：復原。不需要編輯模式。
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+      doUndo();
+      e.preventDefault();
+      return;
+    }
+    if (e.ctrlKey || e.metaKey || e.altKey) return;  // 其他組合鍵不攔
+
     if (e.key === 'e' || e.key === 'E') {
       setEditMode(!S.editMode);
       e.preventDefault();
       return;
     }
     if (e.key === 'Escape') {
+      hideToast();
       closePanel();
       return;
     }

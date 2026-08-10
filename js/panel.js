@@ -27,6 +27,7 @@ function initPanel(handlers) {
   P.cctx = P.catCanvas.getContext('2d');
   P.cctx.imageSmoothingEnabled = false;
   P.onAward = handlers.onAward;
+  P.onUndo = handlers.onUndo;
 
   document.getElementById('panel-close').addEventListener('click', closePanel);
 
@@ -158,20 +159,39 @@ function renderLog(student) {
   for (const e of rows) {
     const li = document.createElement('li');
     li.className = 'log-row' + (e.undone ? ' undone' : '');
+
     const delta = document.createElement('span');
     delta.className = 'log-delta';
     delta.textContent = (e.delta > 0 ? '＋' : '') + e.delta;
+
     const time = document.createElement('span');
     time.className = 'log-time';
     time.textContent = fmtTime(e.ts);
+
     li.appendChild(delta);
     li.appendChild(time);
+
     if (e.undone) {
       const tag = document.createElement('span');
       tag.className = 'log-tag';
       tag.textContent = '已復原';
       li.appendChild(tag);
+    } else if (e.undo_of) {
+      // 這一筆本身就是復原（或取消復原）的紀錄，不提供再復原
+      const tag = document.createElement('span');
+      tag.className = 'log-tag';
+      tag.textContent = e.delta < 0 ? '復原紀錄' : '取消復原';
+      li.appendChild(tag);
+    } else if (isUndoable(e) && !S.readOnly) {
+      // 針對單筆的復原鈕，用來處理「加錯人」而不是「多加一次」
+      const btn = document.createElement('button');
+      btn.className = 'log-undo';
+      btn.textContent = '復原';
+      btn.title = '復原這一筆';
+      btn.addEventListener('click', () => { if (P.onUndo) P.onUndo(e.id); });
+      li.appendChild(btn);
     }
+
     ul.appendChild(li);
   }
 }

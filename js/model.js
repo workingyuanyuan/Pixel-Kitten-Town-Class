@@ -138,6 +138,9 @@ function normalizeData(parsed, classId) {
     xp_after: Number.isFinite(Number(e.xp_after)) ? Number(e.xp_after) : 0,
     reason: typeof e.reason === 'string' ? e.reason : '',
     undone: e.undone === true,
+    // 這一筆是在復原哪一筆。加分紀錄沒有這個欄位；
+    // 復原紀錄指向被復原的加分，取消復原的紀錄指向那筆復原。
+    undo_of: typeof e.undo_of === 'string' ? e.undo_of : undefined,
   }));
 
   if (log.length !== rawLog.length) {
@@ -225,4 +228,106 @@ function awardXp(data, studentId, delta) {
 /* 是否已經滿分（介面用來把加分按鈕變灰）。 */
 function isMaxed(student) {
   return student.xp >= CONFIG.XP_MAX;
+}
+
+/* =====================================================================
+ * 復原
+ * =====================================================================
+ *
+ * 老師會按錯，這是必然。所以復原必須好用、而且要能跨天。
+ *
+ * 【最重要的規則】紀錄只能追加，永遠不刪。
+ * 復原的做法是「再寫一筆相反的紀錄」，並把原本那筆標記成已復原。
+ * 學生來問「老師你什麼時候扣我分」的時候，完整的來龍去脈都在檔案裡。
+ *
+ * 三種紀錄，靠 undo_of 欄位分辨：
+ *   加分      delta > 0，沒有 undo_of
+ *   復原      delta < 0，undo_of 指向被復原的那筆加分
+ *   取消復原  delta > 0，undo_of 指向那筆復原
+ *
+ * 復原堆疊完全由 log 推導，不另外存狀態，所以關掉網頁重開仍然有效。
+ * ===================================================================== */
+
+/* 這筆加分現在可以被復原嗎。 */
+function isUndoable(e) {
+  return e.delta > 0 && !e.undo_of && !e.undone;
+}
+
+/* 最後一筆還沒被復原的加分。找不到就回 null。 */
+function lastUndoable(data) {
+  for (let i = data.log.length - 1; i >= 0; i--) {
+    if (isUndoable(data.log[i])) return data.log[i];
+  }
+  return null;
+}
+
+function eventById(data, id) {
+  return data.log.find((e) => e.id === id) || null;
+}
+
+/* 復原某一筆加分。
+ * 回傳 { ok, reason, student, original, undoEvent, fromLevel, toLevel } */
+function undoEvent(data, eventId) {
+  const original = eventById(data, eventId);
+  if (!original) return { ok: false, reason: 'not-found' };
+  if (!isUndoable(original)) return { ok: false, reason: 'not-undoable' };
+
+  const student = studentById(data, original.student_id);
+  if (!student) return { ok: false, reason: 'student-missing' };
+
+  const fromLevel = levelFromXp(student.xp);
+  student.xp = Math.max(0, student.xp - original.delta);
+  const toLevel = levelFromXp(student.xp);
+
+  const rec = {
+    id: newEventId(data),
+    ts: nowIso(),
+    student_id: student.id,
+    delta: -original.delta,
+    xp_after: student.xp,
+    reason: '',
+    undone: false,
+    undo_of: original.id,
+  };
+  data.log.push(rec);
+  original.undone = true;      // 標記，不是刪除
+  data.updated_at = rec.ts;
+
+  return { ok: true, student, original, undoEvent: rec, fromLevel, toLevel };
+}
+
+/* 取消剛剛那次復原（老師改變主意）。
+ * 同樣是追加一筆，不是把復原紀錄刪掉。 */
+function cancelUndo(data, undoEventId) {
+  const undoRec = eventById(data, undoEventId);
+  if (!undoRec || !undoRec.undo_of || undoRec.undone) {
+    return { ok: false, reason: 'not-cancellable' };
+  }
+  const original = eventById(data, undoRec.undo_of);
+  if (!original) return { ok: false, reason: 'original-missing' };
+
+  const student = studentById(data, undoRec.student_id);
+  if (!student) return { ok: false, reason: 'student-missing' };
+
+  const amount = -undoRec.delta;   // 復原是負的，取回來就是正的
+  const fromLevel = levelFromXp(student.xp);
+  student.xp = Math.min(CONFIG.XP_MAX, student.xp + amount);
+  const toLevel = levelFromXp(student.xp);
+
+  const rec = {
+    id: newEventId(data),
+    ts: nowIso(),
+    student_id: student.id,
+    delta: amount,
+    xp_after: student.xp,
+    reason: '',
+    undone: false,
+    undo_of: undoRec.id,
+  };
+  data.log.push(rec);
+  undoRec.undone = true;   // 這次復原被取消了
+  original.undone = false; // 原本那筆加分重新生效，之後還能再被復原
+  data.updated_at = rec.ts;
+
+  return { ok: true, student, original, cancelEvent: rec, fromLevel, toLevel };
 }

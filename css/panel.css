@@ -247,6 +247,20 @@
   padding: 1px 6px;
 }
 
+.log-undo {
+  margin-left: auto;
+  font: inherit;
+  font-size: 13px;
+  color: #cabfd6;
+  background: transparent;
+  border: 1px solid #4a4157;
+  border-radius: 5px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.log-undo:hover { background: #3a3346; color: #efe9f2; }
+
 .log-empty {
   color: #8c8296;
   font-size: 14px;
