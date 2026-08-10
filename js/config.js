@@ -184,7 +184,7 @@ const CAT_ACCESSORIES = [
   'assets/Winter accessories/cat 1 16x16 animation with reindeer antler headband red.png',
 ];
 
-/* 地圖素材路徑。 */
+/* 地圖素材路徑。stone 是實心鋪面，跟草地圖集裡的散落石板是兩回事。 */
 const TILE_ASSETS = {
   grass: 'assets/Pixel Art Top Down - Basic v1.2.3/Texture/TX Tileset Grass.png',
   stone: 'assets/Pixel Art Top Down - Basic v1.2.3/Texture/TX Tileset Stone Ground.png',
