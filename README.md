@@ -127,3 +127,20 @@
 | **貓咪頭上只顯示數字，沒有姓名** | 這是還沒匯入真實名單時的正常狀態，顯示的是座號。匯入名單後就會變成姓名。 |
 | **畫面上方出現紅色橫幅警告檔案損毀** | 系統發現你的 `class-data.json` 檔案格式有誤（通常是因為手動編輯時漏了括號或逗號）。系統已切換為唯讀以保護資料。請用文字編輯器將檔案修復，再點擊工具列的 ↻ 按鈕。 |
 | **手動編輯 JSON 後，分數看起來不對勁** | 系統的歷史紀錄與總分是連動的，手動編輯如果沒有同步處理可能會出現異常。強烈建議不要手動去改檔案裡的數字，請使用介面上的復原功能，或是透過 `tools/import_roster.py` 來維護名單。 |
+
+---
+
+## 素材來源與致謝
+
+這個專案站在幾位像素美術作者的肩膀上。請支持他們的作品：
+
+| 用途 | 素材包 | 作者 | 授權 |
+| :--- | :--- | :--- | :--- |
+| 貓咪角色動畫 | [Animated Pixel Kittens / Cats 32x32](https://last-tick.itch.io/animated-pixel-kittens-cats-32x32) | Last tick | 可用於個人與商業專案 |
+| 地圖與場景美術 | [Pixel Art Top Down - Basic](https://cainos.itch.io/pixel-art-top-down-basic) | Cainos | 可用於免費與商業專案 |
+| 介面配色參考 | [Sprout Lands - UI Pack](https://cupnooble.itch.io/sprout-lands-asset-pack) | Cup Nooble | 僅參考色調，**本專案未包含該素材包的任何檔案** |
+
+Sprout Lands 的授權禁止轉散布，因此這個 repo 裡沒有它的檔案，`css/` 中只有十六進位色碼。
+完整說明見 [CREDITS.md](CREDITS.md)。
+
+本專案為非商業的教學用途工具。

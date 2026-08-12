@@ -353,7 +353,7 @@
       <label>
         素材檔：
         <select id="assetSelect">
-          <!-- 由 JS 自動填入 CAT_SKINS 與 TILE_ASSETS -->
+          <!-- 由 JS 自動填入 CAT_BASES / CAT_ACCESSORIES 與 TILE_ASSETS -->
         </select>
       </label>
 
@@ -500,10 +500,15 @@
     function initDropdowns() {
       assetSelect.innerHTML = '';
 
-      // 1. 貓咪外觀素材 (CAT_SKINS)
-      if (typeof CAT_SKINS !== 'undefined' && Array.isArray(CAT_SKINS)) {
+      // 1. 貓咪外觀素材（基底毛色 + 配件圖層）
+      //    早期版本這裡叫 CAT_SKINS，後來確認配件包只有配件圖層、
+      //    必須疊在基底貓上面畫，才拆成兩個清單。
+      const CAT_SKINS = []
+        .concat(typeof CAT_BASES !== 'undefined' ? CAT_BASES : [])
+        .concat(typeof CAT_ACCESSORIES !== 'undefined' ? CAT_ACCESSORIES : []);
+      if (CAT_SKINS.length) {
         const catGroup = document.createElement('optgroup');
-        catGroup.label = '🐱 貓咪造型 (CAT_SKINS)';
+        catGroup.label = '🐱 貓咪造型（基底 + 配件）';
         CAT_SKINS.forEach((path, idx) => {
           const opt = document.createElement('option');
           opt.value = path;
