@@ -28,8 +28,12 @@ function initPanel(handlers) {
   P.cctx.imageSmoothingEnabled = false;
   P.onAward = handlers.onAward;
   P.onUndo = handlers.onUndo;
+  P.onNote = handlers.onNote;
+  P.onUndoNote = handlers.onUndoNote;
 
   document.getElementById('panel-close').addEventListener('click', closePanel);
+
+  initNoteModal();
 
   // 點面板外面就關掉
   document.getElementById('stage-wrap').addEventListener('pointerdown', (e) => {
@@ -63,6 +67,7 @@ function openPanel(cat) {
 
 function closePanel() {
   if (!P.cat) return;
+  closeNoteModal();
   P.cat = null;
   P.root.classList.remove('open');
   // 等滑出動畫結束再真的藏起來
@@ -85,6 +90,106 @@ function buildAwardButtons() {
     });
     wrap.appendChild(b);
   });
+}
+
+/* =====================================================================
+ * 登記
+ * =====================================================================
+ *
+ * 登記與加分刻意分成兩顆完全不同顏色的按鈕，而且登記多一層對話框。
+ * 上課時手忙腳亂，這兩件事絕對不能誤按成對方。
+ *
+ * 對話框裡的兩顆按鈕顏色也刻意不同：
+ *   取消  灰色，代表「什麼都不會發生」
+ *   確認  與加分鈕同一套綠色，維持整個介面的配色一致
+ * ===================================================================== */
+
+const NOTE = {
+  modal: null,
+  input: null,
+  studentId: null,
+};
+
+function initNoteModal() {
+  NOTE.modal = document.getElementById('note-modal');
+  NOTE.input = document.getElementById('note-input');
+
+  document.getElementById('panel-note-btn')
+    .addEventListener('click', () => openNoteModal());
+
+  document.getElementById('note-cancel')
+    .addEventListener('click', () => closeNoteModal());
+
+  document.getElementById('note-confirm')
+    .addEventListener('click', () => confirmNote());
+
+  // 點對話框外的暗色區域等同取消
+  NOTE.modal.addEventListener('pointerdown', (e) => {
+    if (e.target === NOTE.modal) closeNoteModal();
+  });
+
+  // Enter 直接確認，Esc 取消。這兩個鍵在輸入框裡處理，
+  // 因為 main.js 的全域快捷鍵遇到 INPUT 會直接放行不攔截。
+  NOTE.input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); confirmNote(); }
+    else if (e.key === 'Escape') { e.preventDefault(); closeNoteModal(); }
+  });
+
+  NOTE.input.maxLength = CONFIG.NOTE_MAX_LEN || 60;
+
+  buildNotePresets();
+}
+
+/* 常用事由的快捷鈕。上課時打字太慢，點一下就填進輸入框。 */
+function buildNotePresets() {
+  const wrap = document.getElementById('note-presets');
+  wrap.innerHTML = '';
+  const list = CONFIG.NOTE_PRESETS || [];
+  for (const text of list) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'note-preset';
+    b.textContent = text;
+    b.addEventListener('click', () => {
+      NOTE.input.value = text;
+      NOTE.input.focus();
+    });
+    wrap.appendChild(b);
+  }
+}
+
+function noteModalOpen() {
+  return NOTE.modal ? !NOTE.modal.hidden : false;
+}
+
+function openNoteModal() {
+  if (!P.cat || S.readOnly) return;
+  NOTE.studentId = P.cat.student.id;
+
+  const s = P.cat.student;
+  document.getElementById('note-who').textContent =
+    s.name && s.name.trim() ? s.name : '座號 ' + s.seat;
+
+  NOTE.input.value = '';
+  NOTE.modal.hidden = false;
+  void NOTE.modal.offsetWidth;   // 同 openPanel：強制重排才播得出動畫
+  NOTE.modal.classList.add('open');
+  NOTE.input.focus();
+}
+
+function closeNoteModal() {
+  if (!NOTE.modal || NOTE.modal.hidden) return;
+  NOTE.modal.classList.remove('open');
+  NOTE.modal.hidden = true;
+  NOTE.studentId = null;
+}
+
+function confirmNote() {
+  const text = NOTE.input.value.trim();
+  if (!text) { NOTE.input.focus(); return; }        // 空白事由不留紀錄
+  const id = NOTE.studentId;
+  closeNoteModal();
+  if (id && P.onNote) P.onNote(id, text);
 }
 
 /* ---------------------------------------------------------------------
@@ -126,6 +231,13 @@ function refreshPanel() {
   document.querySelectorAll('#panel-awards .award-btn').forEach((b) => {
     b.disabled = maxed || S.readOnly;
   });
+  /* 登記按鈕。與加分不同的是，滿分後仍然可以登記 ——
+   * 登記記的是事實，跟這位學生拿了幾分沒有關係。
+   * 只有唯讀（還沒連接資料夾）時才會關掉，因為那時寫不進檔案。 */
+  const noteBtn = document.getElementById('panel-note-btn');
+  noteBtn.hidden = !CONFIG.NOTE_ENABLED;
+  noteBtn.disabled = S.readOnly;
+
   document.getElementById('panel-maxed-note').hidden = !maxed;
   if (S.readOnly) {
     document.getElementById('panel-maxed-note').hidden = false;
@@ -161,6 +273,44 @@ function renderLog(student) {
   for (const e of rows) {
     const li = document.createElement('li');
     li.className = 'log-row' + (e.undone ? ' undone' : '');
+
+    /* 登記紀錄長得跟加分紀錄不一樣：
+     * 分數欄改成「登記」標籤，並且把事由整段顯示出來。
+     * 這一整區就是老師期末被質疑時要拿出來的東西，所以寧可佔版面。 */
+    if (isNote(e) || isNoteUndo(e)) {
+      li.className += ' log-note' + (isNoteUndo(e) ? ' log-note-undo' : '');
+
+      const kind = document.createElement('span');
+      kind.className = 'log-kind';
+      kind.textContent = isNoteUndo(e) ? '已撤銷' : '登記';
+
+      const time = document.createElement('span');
+      time.className = 'log-time';
+      time.textContent = fmtTime(e.ts);
+
+      const head = document.createElement('div');
+      head.className = 'log-note-head';
+      head.appendChild(kind);
+      head.appendChild(time);
+
+      if (isNote(e) && !e.undone && !S.readOnly) {
+        const btn = document.createElement('button');
+        btn.className = 'log-undo';
+        btn.textContent = '撤銷';
+        btn.title = '撤銷這筆登記（原紀錄仍會保留在檔案裡）';
+        btn.addEventListener('click', () => { if (P.onUndoNote) P.onUndoNote(e.id); });
+        head.appendChild(btn);
+      }
+
+      const why = document.createElement('div');
+      why.className = 'log-reason';
+      why.textContent = e.reason || '（未填事由）';
+
+      li.appendChild(head);
+      li.appendChild(why);
+      ul.appendChild(li);
+      continue;
+    }
 
     const delta = document.createElement('span');
     delta.className = 'log-delta';

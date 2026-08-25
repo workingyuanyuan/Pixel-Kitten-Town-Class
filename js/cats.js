@@ -116,6 +116,8 @@ function createCats(students, mapData, bundle) {
       // 表演用的計時器
       awardFx: 0,
       levelFx: 0,
+      // 由 main.js 的 refreshDrowsy() 維護，見 poseOf()
+      drowsy: false,
       floats: [],           // 飄字 { text, t }
       barShown: 0,          // 進度條顯示值，用來做緩動
     };
@@ -126,9 +128,22 @@ function createCats(students, mapData, bundle) {
   return cats;
 }
 
-/* 目前等級對應的姿勢設定。 */
+/* 目前等級對應的姿勢設定。
+ *
+ * 唯一的例外是打瞌睡：當老師的登記次數超過加分次數時（cat.drowsy 由
+ * main.js 的 refreshDrowsy() 依 model.js 的 isDrowsy() 設定），改用睡覺
+ * 動畫池，並停止走動。這與分數高低無關 —— 分數再低也不會自己睡著，
+ * 必須是老師實際登記過才會。滿級光環等等仍沿用原本等級的設定。 */
 function poseOf(cat) {
-  return POSE_LADDER[levelFromXp(cat.student.xp)];
+  const base = POSE_LADDER[levelFromXp(cat.student.xp)];
+  if (!cat.drowsy) return base;
+  return {
+    idle: DROWSY_IDLE,
+    canWalk: false,
+    walkChance: 0,
+    sparkle: false,
+    crown: base.crown,
+  };
 }
 
 /* 從該等級的閒置動畫池裡抽一個。 */
@@ -239,6 +254,14 @@ function playAward(cat, delta) {
   cat.mode = 'idle';
   setAnim(cat.anim, isSitting(cat) ? AWARD_REACTION.sitting : AWARD_REACTION.standing);
   cat.timer = 0.8;
+}
+
+/* 登記當下的表演：打個呵欠，沒有任何負面表現，也沒有飄字。
+ * 登記不扣分，所以畫面上不該出現任何像是被扣分的東西。 */
+function playNote(cat) {
+  cat.mode = 'idle';
+  setAnim(cat.anim, isSitting(cat) ? NOTE_REACTION.sitting : NOTE_REACTION.standing);
+  cat.timer = 1.2;
 }
 
 function playLevelUp(cat) {

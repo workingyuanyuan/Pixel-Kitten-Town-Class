@@ -178,6 +178,177 @@
   box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.3), 0 5px 0 #a2957f;
 }
 
+/* ---------------- 登記按鈕 ---------------- */
+/* 刻意用工具列的棕色系，而不是加分鈕的綠色。
+   投影上課時手忙腳亂，這兩顆絕對不能長得像。 */
+.note-btn {
+  margin-top: 10px;
+  width: 100%;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--ink);
+  background: var(--btn);
+  border: 3px solid var(--line);
+  border-radius: 11px;
+  padding: 11px 0 13px;
+  cursor: pointer;
+  box-shadow: inset 0 3px 0 var(--cream), 0 5px 0 var(--btn-sh);
+}
+
+.note-btn:hover:not(:disabled) { filter: brightness(1.05); }
+
+.note-btn:active:not(:disabled) {
+  transform: translateY(5px);
+  box-shadow: inset 0 3px 0 var(--cream), 0 0 0 var(--btn-sh);
+}
+
+.note-btn:disabled {
+  color: #6d6257;
+  background: #c3b6a3;
+  border-color: #8d8171;
+  cursor: default;
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.3), 0 5px 0 #a2957f;
+}
+
+/* ---------------- 登記對話框 ---------------- */
+#note-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(30, 24, 20, 0.55);
+  opacity: 0;
+  transition: opacity 140ms ease-out;
+}
+
+#note-modal.open { opacity: 1; }
+#note-modal[hidden] { display: none; }
+
+#note-box {
+  width: 420px;
+  max-width: 100%;
+  color: var(--ink);
+  background: var(--panel);
+  border: 4px solid var(--line);
+  border-radius: 16px;
+  padding: 22px 24px 20px;
+  box-shadow: inset 0 3px 0 var(--cream), 0 10px 0 var(--btn-sh),
+              0 22px 46px rgba(0, 0, 0, 0.45);
+  transform: translateY(12px) scale(0.97);
+  transition: transform 140ms ease-out;
+}
+
+#note-modal.open #note-box { transform: translateY(0) scale(1); }
+
+#note-title {
+  font-size: 22px;
+  font-weight: 800;
+  text-align: center;
+  text-shadow: 0 1px 0 var(--cream);
+}
+
+#note-who {
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #7a6455;
+  text-align: center;
+  min-height: 1em;
+}
+
+#note-input {
+  width: 100%;
+  margin-top: 16px;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--cream);
+  border: 3px solid var(--line);
+  border-radius: 9px;
+  padding: 11px 12px;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.16);
+}
+
+#note-input:focus {
+  outline: none;
+  border-color: #5fbf72;
+}
+
+#note-input::placeholder { color: #a8927c; font-weight: 500; }
+
+/* 常用事由快捷鈕 */
+#note-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 11px;
+}
+
+.note-preset {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--btn);
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 12px 6px;
+  cursor: pointer;
+  box-shadow: inset 0 2px 0 var(--cream), 0 2px 0 var(--btn-sh);
+}
+
+.note-preset:active {
+  transform: translateY(2px);
+  box-shadow: inset 0 2px 0 var(--cream), 0 0 0 var(--btn-sh);
+}
+
+/* 兩顆結果按鈕。顏色刻意不同：
+   取消 = 灰色（什麼都不會發生），確認 = 與加分鈕同一套綠色。 */
+#note-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.modal-btn {
+  flex: 1;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 800;
+  border-radius: 11px;
+  padding: 12px 0 14px;
+  cursor: pointer;
+}
+
+.modal-btn:active {
+  transform: translateY(5px);
+}
+
+.modal-btn-grey {
+  color: #5a5148;
+  background: linear-gradient(#cfc7ba, #b9b0a2);
+  border: 3px solid #8d8171;
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.42), 0 5px 0 #978d7d;
+}
+
+.modal-btn-grey:hover { filter: brightness(1.04); }
+.modal-btn-grey:active { box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.42), 0 0 0 #978d7d; }
+
+.modal-btn-main {
+  color: #1e3a1e;
+  background: linear-gradient(#8ee09f, #6cc77e);
+  border: 3px solid #3f6b45;
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.5), 0 5px 0 #4d8f5b;
+}
+
+.modal-btn-main:hover { filter: brightness(1.06); }
+.modal-btn-main:active { box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.5), 0 0 0 #4d8f5b; }
+
 #panel-maxed-note {
   margin-top: 12px;
   font-size: 13px;
@@ -273,6 +444,40 @@
   box-shadow: inset 0 2px 0 var(--cream), 0 0 0 var(--btn-sh);
 }
 
+/* 登記紀錄：兩行，第二行是事由全文。
+   這是老師期末拿得出來的佐證，寧可佔版面也要看得完整。 */
+.log-note {
+  display: block;
+  padding: 9px 4px 10px;
+}
+
+.log-note-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.log-kind {
+  font-size: 12px;
+  font-weight: 800;
+  color: #7a5a2e;
+  background: #e6cfa2;
+  border: 2px solid var(--line);
+  border-radius: 5px;
+  padding: 1px 7px 2px;
+}
+
+.log-note .log-reason {
+  margin-top: 5px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.log-note-undo .log-reason { text-decoration: line-through; }
+
 .log-empty {
   color: #7a6455;
   font-size: 14px;
@@ -281,6 +486,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   #panel { transition: none; }
+  #note-modal, #note-box { transition: none; }
   #panel-bar-fill { transition: none; }
   #panel-levelup.show { animation: none; opacity: 1; }
 }

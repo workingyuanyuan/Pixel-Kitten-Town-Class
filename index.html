@@ -78,6 +78,7 @@
   </div>
 
   <div id="panel-awards"></div>
+  <button id="panel-note-btn" class="note-btn" type="button" hidden>登記</button>
   <div id="panel-maxed-note" hidden>已達最高等級，不再累積分數。</div>
 
   <div id="panel-levelup"></div>
@@ -85,6 +86,24 @@
   <div id="panel-log-head">最近的紀錄</div>
   <ul id="panel-log"></ul>
 </aside>
+
+<!-- 登記事由的對話框。置中蓋在畫面上，確認才會寫入紀錄。 -->
+<div id="note-modal" hidden>
+  <div id="note-box" role="dialog" aria-modal="true" aria-labelledby="note-title">
+    <div id="note-title">登記事由</div>
+    <div id="note-who"></div>
+
+    <input id="note-input" type="text" autocomplete="off"
+           placeholder="例如：上課睡覺、上課吵鬧">
+
+    <div id="note-presets"></div>
+
+    <div id="note-actions">
+      <button id="note-cancel" class="modal-btn modal-btn-grey" type="button">取消</button>
+      <button id="note-confirm" class="modal-btn modal-btn-main" type="button">確認</button>
+    </div>
+  </div>
+</div>
 
 <div id="toast" hidden>
   <span id="toast-text"></span>

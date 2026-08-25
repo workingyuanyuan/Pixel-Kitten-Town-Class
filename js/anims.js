@@ -48,8 +48,11 @@ const CAT_ANIMS = {
   walk_left_up:      { row: 11, frames: 6,  fps: 9 },
 
   // --- SLEEP 睡覺（12-19）---
-  // 【禁用】安全設計：不以「睡覺 / 虛弱」表現低分。整個區段不進姿勢階梯。
-  //         保留定義僅供 spritesheet-viewer 對格用。
+  // 【條件解鎖】不以分數高低決定是否睡覺 —— 這一段永遠不會出現在
+  //             POSE_LADDER 裡。它只在老師實際「登記」了上課睡覺 / 吵鬧等
+  //             事由、且登記次數超過加分次數時才會啟用（見 DROWSY_IDLE）。
+  //             也就是說，畫面上的瞌睡貓對應的是老師手動留下的佐證，
+  //             不是程式拿低分去羞辱學生。
   sleep_1_l:         { row: 12, frames: 2,  fps: 2 },
   sleep_1_r:         { row: 13, frames: 2,  fps: 2 },
   sleep_2_l:         { row: 14, frames: 2,  fps: 2 },
@@ -121,11 +124,14 @@ const CAT_ANIMS = {
  *
  * 任何負責挑選動畫的程式（cats.js 的姿勢階梯、閒置動作抽選、
  * 加分與升級表演）都必須先通過 assertAnimAllowed()。
- * 若未來有人「順手」把睡覺或昏倒排進去，這裡會直接擋下並拋錯。
+ * 若未來有人「順手」把昏倒或攻擊排進去，這裡會直接擋下並拋錯。
+ *
+ * 睡覺（12-19 列）已從這份清單移出，但它仍然不是自由使用的動畫：
+ * 唯一合法的來源是 config.js 的 DROWSY_IDLE，而那個池子只有在老師
+ * 登記次數超過加分次數時才會被 cats.js 的 poseOf() 選用。
+ * 絕對不要把睡覺放進 POSE_LADDER。
  * ------------------------------------------------------------------- */
 const FORBIDDEN_ANIMS = new Set([
-  'sleep_1_l', 'sleep_1_r', 'sleep_2_l', 'sleep_2_r',
-  'sleep_3_l', 'sleep_3_r', 'sleep_4_l', 'sleep_4_r',
   'hiss_l', 'hiss_r',
   'ko',
   'paw_down', 'paw_up', 'paw_left', 'paw_right',
@@ -138,7 +144,7 @@ function assertAnimAllowed(name) {
   }
   if (FORBIDDEN_ANIMS.has(name)) {
     throw new Error(
-      `動畫「${name}」屬於禁用清單（睡覺 / 哈氣 / 昏倒 / 攻擊）。` +
+      `動畫「${name}」屬於禁用清單（哈氣 / 昏倒 / 攻擊）。` +
       `這是刻意的安全設計，見實作計畫第 8 節。`
     );
   }

@@ -268,12 +268,69 @@ function award(studentId, delta) {
     playAward(cat, result.applied);
     if (result.leveledUp) playLevelUp(cat);
   }
+  // 加分會讓加分次數增加，可能剛好把瞌睡狀態解除掉
+  refreshDrowsy(studentId);
   if (panelIsOpen() && panelCat() && panelCat().student.id === studentId) {
     refreshPanel();
     if (result.leveledUp) flashLevelUp(result.toLevel);
   }
   scheduleSave();
   refreshControls();
+}
+
+/* ---------------------------------------------------------------------
+ * 登記
+ *
+ * 留下一筆有時間、有事由的佐證，完全不動分數。
+ * 這是刻意與加分分開的第二條路徑：加分改分數，登記記事實。
+ * ------------------------------------------------------------------- */
+function logNoteFor(studentId, reason) {
+  if (S.readOnly) return;
+  const r = logNote(S.data, studentId, reason);
+  if (!r.ok) return;
+
+  const cat = S.cats.find((c) => c.student.id === studentId);
+  if (cat) playNote(cat);
+
+  refreshDrowsy(studentId);
+  if (panelIsOpen() && panelCat() && panelCat().student.id === studentId) refreshPanel();
+
+  const s = studentById(S.data, studentId);
+  showToast(`已登記：${studentLabel(s)}　${r.event.reason}`, null, null);
+
+  scheduleSave();
+  refreshControls();
+}
+
+/* 撤銷一筆登記。與加分的復原一樣是追加紀錄，原紀錄永遠留在檔案裡。 */
+function undoNoteFor(eventId) {
+  if (S.readOnly) return;
+  const r = undoNote(S.data, eventId);
+  if (!r.ok) return;
+
+  refreshDrowsy(r.student.id);
+  afterMutation(r.student.id);
+  showToast(`已撤銷登記：${studentLabel(r.student)}　${r.original.reason}`, null, null);
+}
+
+/* ---------------------------------------------------------------------
+ * 瞌睡狀態
+ *
+ * 每一格畫面都去掃整份 log 太浪費，所以把結果快取在貓身上，
+ * 只在資料有變動時重算。傳 studentId 只更新一隻，不傳就全部重算。
+ *
+ * 狀態真的改變時要立刻換動作，不然貓會維持原本的動畫直到計時器到期，
+ * 老師按完登記卻看不到反應，會以為沒生效。
+ * ------------------------------------------------------------------- */
+function refreshDrowsy(studentId) {
+  if (!S.data || !S.cats) return;
+  for (const cat of S.cats) {
+    if (studentId && cat.student.id !== studentId) continue;
+    const next = isDrowsy(S.data, cat.student.id);
+    if (next === cat.drowsy) continue;
+    cat.drowsy = next;
+    enterIdle(cat);
+  }
 }
 
 /* ---------------------------------------------------------------------
@@ -322,6 +379,7 @@ function afterMutation(studentId) {
   const cat = S.cats.find((c) => c.student.id === studentId);
   // 降級不做任何懲罰表現，安靜地改數字就好（見實作計畫第 7 節）。
   if (cat) cat.levelFx = 0;
+  refreshDrowsy(studentId);
   if (panelIsOpen() && panelCat() && panelCat().student.id === studentId) refreshPanel();
   scheduleSave();
   refreshControls();
@@ -494,6 +552,9 @@ async function switchClass(id) {
 
 function rebuildCats() {
   S.cats = createCats(S.data.students, S.map, S.bundle);
+  // 重建之後貓的 drowsy 都是 false，要照 log 重新算一次，
+  // 不然換班或重新載入檔案後，該打瞌睡的貓會站得好好的。
+  refreshDrowsy(null);
 }
 
 /* ---------------------------------------------------------------------
@@ -546,6 +607,8 @@ async function boot() {
   initPanel({
     onAward: (id, v) => award(id, v),
     onUndo: (eventId) => applyUndo(eventId),
+    onNote: (id, reason) => logNoteFor(id, reason),
+    onUndoNote: (eventId) => undoNoteFor(eventId),
   });
   wireControls();
 
@@ -690,6 +753,14 @@ function wireControls() {
     // 在輸入框裡打字時不要攔截
     const tag = e.target && e.target.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+    // 登記對話框開著時，整個畫面的快捷鍵都停用。
+    // 最怕的是焦點不在輸入框，結果空白鍵直接變成加分。
+    if (noteModalOpen()) {
+      if (e.key === 'Escape') closeNoteModal();
+      e.preventDefault();
+      return;
+    }
 
     // 編輯模式的快捷鍵優先（Delete、Ctrl+S、Esc）
     if (editKeyDown(e)) return;

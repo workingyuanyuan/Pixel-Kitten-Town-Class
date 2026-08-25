@@ -141,6 +141,9 @@ function normalizeData(parsed, classId) {
     // 這一筆是在復原哪一筆。加分紀錄沒有這個欄位；
     // 復原紀錄指向被復原的加分，取消復原的紀錄指向那筆復原。
     undo_of: typeof e.undo_of === 'string' ? e.undo_of : undefined,
+    // 紀錄種類。舊檔案沒有這個欄位，一律當成加分紀錄（undefined）。
+    // 目前只有 'note'（登記）與 'note_undo'（撤銷登記）兩種。
+    kind: (e.kind === 'note' || e.kind === 'note_undo') ? e.kind : undefined,
   }));
 
   if (log.length !== rawLog.length) {
@@ -228,6 +231,110 @@ function awardXp(data, studentId, delta) {
 /* 是否已經滿分（介面用來把加分按鈕變灰）。 */
 function isMaxed(student) {
   return student.xp >= CONFIG.XP_MAX;
+}
+
+/* =====================================================================
+ * 登記
+ * =====================================================================
+ *
+ * 登記是「留下事實佐證」，不是處罰。老師遇到上課睡覺、吵鬧的時候，
+ * 需要的是一筆有時間、有事由的紀錄，好在期末被質疑時拿得出來。
+ *
+ * 【鐵則】登記絕對不動分數。delta 永遠是 0，xp_after 就是當下的分數。
+ *         這個系統從頭到尾只有一個扣分途徑，就是復原加分。
+ *
+ * 登記紀錄與加分紀錄放在同一個 log 陣列裡，靠 kind === 'note' 分辨。
+ * 一樣只能追加，不能刪除。
+ * ------------------------------------------------------------------- */
+
+function isNote(e) {
+  return e.kind === 'note';
+}
+
+function isNoteUndo(e) {
+  return e.kind === 'note_undo';
+}
+
+/* 登記一筆事由。
+ * 回傳 { ok, reason, event }。事由是空字串時不會留下任何紀錄。 */
+function logNote(data, studentId, reason) {
+  const s = studentById(data, studentId);
+  if (!s) return { ok: false, reason: 'not-found' };
+
+  const max = CONFIG.NOTE_MAX_LEN || 60;
+  const text = String(reason == null ? '' : reason).trim().slice(0, max);
+  if (!text) return { ok: false, reason: 'empty' };
+
+  const event = {
+    id: newEventId(data),
+    ts: nowIso(),
+    student_id: s.id,
+    delta: 0,          // 永遠是 0
+    xp_after: s.xp,    // 當下分數，登記前後不變
+    reason: text,
+    undone: false,
+    kind: 'note',
+  };
+  data.log.push(event);
+  data.updated_at = event.ts;
+
+  return { ok: true, event: event };
+}
+
+/* 登記錯人、或事由打錯了。
+ * 做法與加分的復原一致：追加一筆撤銷紀錄，把原本那筆標記 undone，
+ * 兩筆都留在檔案裡。 */
+function undoNote(data, eventId) {
+  const original = eventById(data, eventId);
+  if (!original || !isNote(original) || original.undone) {
+    return { ok: false, reason: 'not-undoable' };
+  }
+  const student = studentById(data, original.student_id);
+  if (!student) return { ok: false, reason: 'student-missing' };
+
+  const rec = {
+    id: newEventId(data),
+    ts: nowIso(),
+    student_id: student.id,
+    delta: 0,
+    xp_after: student.xp,
+    reason: original.reason,
+    undone: false,
+    kind: 'note_undo',
+    undo_of: original.id,
+  };
+  data.log.push(rec);
+  original.undone = true;
+  data.updated_at = rec.ts;
+
+  return { ok: true, student: student, original: original, undoEvent: rec };
+}
+
+/* 這位學生目前有效的登記筆數（撤銷掉的不算）。 */
+function noteCountFor(data, studentId) {
+  let n = 0;
+  for (const e of data.log) {
+    if (e.student_id === studentId && isNote(e) && !e.undone) n++;
+  }
+  return n;
+}
+
+/* 這位學生目前有效的加分筆數。
+ * 注意算的是「次數」不是「分數」—— 加 3 分的一筆只算一次。
+ * 被復原的加分不算，復原與取消復原本身也不算。 */
+function awardCountFor(data, studentId) {
+  let n = 0;
+  for (const e of data.log) {
+    if (e.student_id === studentId && e.delta > 0 && !e.undo_of && !e.undone) n++;
+  }
+  return n;
+}
+
+/* 登記次數超過加分次數 —— 這隻貓會打瞌睡。
+ * 這是 cats.js 唯一會去挑睡覺動畫的條件。 */
+function isDrowsy(data, studentId) {
+  if (!CONFIG.DROWSY_ENABLED) return false;
+  return noteCountFor(data, studentId) > awardCountFor(data, studentId);
 }
 
 /* =====================================================================
