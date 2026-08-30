@@ -1,5 +1,5 @@
 const fs = require('fs'), vm = require('vm'), path = require('path');
-const ROOT = 'N:/Coding/grade-pixel-web';
+const ROOT = path.resolve(__dirname, '..');
 const ctx = { console, Math, Date, Number, JSON, Array, Set, String, Object };
 vm.createContext(ctx);
 for (const f of ['js/config.js', 'js/model.js']) {

@@ -482,10 +482,12 @@ function refreshControls() {
   // 連上之後就不再顯示「連接資料夾」，改成班級下拉選單
   const connectBtn = document.getElementById('btn-connect');
   const classWrap = document.getElementById('class-wrap');
+  const disconnectBtn = document.getElementById('btn-disconnect');
   connectBtn.hidden = connected;
   classWrap.hidden = !connected;
+  disconnectBtn.hidden = !connected;
   if (!connected) {
-    connectBtn.textContent = S.pendingHandle ? '確認資料夾授權' : '連接資料夾';
+    connectBtn.title = S.pendingHandle ? '確認資料夾授權' : '連接資料夾';
   }
 
   document.getElementById('btn-reload').disabled = !S.dirHandle;
@@ -713,6 +715,42 @@ function wireControls() {
 
   document.getElementById('class-select').addEventListener('change', (e) => {
     switchClass(e.target.value);
+  });
+
+  /* --- 更換資料夾：清除目前的授權，讓老師重新選一個 --- */
+  document.getElementById('btn-disconnect').addEventListener('click', async () => {
+    // 有未存檔的變更時先確認
+    if (isDirty()) {
+      const go = confirm('有尚未寫入的變更，更換資料夾會捨棄它們。要繼續嗎？');
+      if (!go) return;
+      S.savedSeq = S.dataSeq;
+      if (S.saveTimer) { clearTimeout(S.saveTimer); S.saveTimer = null; }
+    }
+
+    // 清除 IndexedDB 裡記住的目錄 handle
+    await idbDelete(IDB_KEY);
+
+    // 重設連線狀態
+    S.dirHandle = null;
+    S.pendingHandle = null;
+    S.classId = null;
+    S.classes = [];
+    S.readOnly = true;
+    S.lastRaw = null;
+    S.dataSeq = 0;
+    S.savedSeq = 0;
+
+    closePanel();
+    hideToast();
+    hideBanner();
+
+    // 用假資料撐畫面
+    await loadFallbackData();
+    S.map = generateMap(CONFIG.MAP_SEED, CONFIG.MAP_COLS, CONFIG.MAP_ROWS);
+    S.mapDirty = false;
+    rebuildCats();
+    refreshControls();
+    setSaveState('已斷開，請重新選擇資料夾');
   });
 
   /* --- 滑鼠移到貓上時輕微高亮，並把游標換成手指 --- */

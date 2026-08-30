@@ -63,6 +63,20 @@ async function idbSet(key, value) {
   }
 }
 
+async function idbDelete(key) {
+  try {
+    const db = await idbOpen();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).delete(key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (e) {
+    console.warn('無法清除資料夾記錄。', e);
+  }
+}
+
 /* ---------------------------------------------------------------------
  * 目錄授權
  * ------------------------------------------------------------------- */

@@ -1,5 +1,8 @@
+data/**/*.json
 data/*.json
 !data/*.example.json
 data/backups/
+data/*/
 data/.gitignore
 data/README.md
+

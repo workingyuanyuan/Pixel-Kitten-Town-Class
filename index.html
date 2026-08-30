@@ -17,13 +17,14 @@
   <header id="toolbar">
     <span id="title"></span>
 
-    <!-- 沒連接資料夾前顯示這顆；連上之後換成班級下拉選單 -->
-    <button id="btn-connect" class="tbtn">連接資料夾</button>
+    <!-- 沒連接資料夾前顯示這顆；連上之後換成班級下拉選單與更換資料夾按鈕 -->
+    <button id="btn-connect" class="tbtn tbtn-icon" title="連接資料夾">📁</button>
 
     <label id="class-wrap" hidden>
       <span class="tlabel">班級</span>
       <select id="class-select" class="tselect"></select>
     </label>
+    <button id="btn-disconnect" class="tbtn tbtn-icon" hidden title="更換資料夾">📁</button>
 
     <button id="btn-reload" class="tbtn tbtn-icon" disabled title="重新載入檔案">↻</button>
     <button id="btn-mapedit" class="tbtn tbtn-icon" title="地圖編輯">✎</button>
