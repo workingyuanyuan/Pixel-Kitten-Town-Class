@@ -13,11 +13,13 @@ def main():
     parser = argparse.ArgumentParser(description="匯入班級名單")
     parser.add_argument('--input', default='tools/names.txt', help='名單文字檔路徑 (預設: tools/names.txt)')
     parser.add_argument('--class-id', default='class-data', help='班級 ID (預設: class-data)')
+    parser.add_argument('--data-dir', default='data/11501', help='資料目錄 (預設: data/11501)')
     parser.add_argument('--dry-run', action='store_true', help='測試執行，不會實際寫入檔案')
     args = parser.parse_args()
 
     input_path = args.input
     class_id = args.class_id
+    data_dir = args.data_dir
     is_dry_run = args.dry_run
 
     if not os.path.exists(input_path):
@@ -50,7 +52,7 @@ def main():
             sys.exit(1)
         parsed_roster[seat] = name
 
-    data_path = f"data/{class_id}.json"
+    data_path = os.path.join(data_dir, f"{class_id}.json")
     
     tz = datetime.timezone(datetime.timedelta(hours=8))
     now = datetime.datetime.now(tz)
@@ -122,8 +124,9 @@ def main():
         return
 
     if existing_data:
-        os.makedirs("data/backups", exist_ok=True)
-        backup_path = f"data/backups/{class_id}-import-{timestamp}.json"
+        backup_dir = os.path.join(data_dir, "backups")
+        os.makedirs(backup_dir, exist_ok=True)
+        backup_path = os.path.join(backup_dir, f"{class_id}-import-{timestamp}.json")
         shutil.copy2(data_path, backup_path)
         print(f"已備份原始資料至 {backup_path}")
 

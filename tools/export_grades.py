@@ -42,10 +42,12 @@ def get_config():
 def main():
     parser = argparse.ArgumentParser(description="匯出結算成績")
     parser.add_argument('--class-id', default='class-data', help='班級 ID (預設: class-data)')
-    parser.add_argument('--out', help='輸出 CSV 檔案路徑 (預設: data/export-YYYY-MM-DD.csv)')
+    parser.add_argument('--data-dir', default='data/11501', help='資料目錄 (預設: data/11501)')
+    parser.add_argument('--out', help='輸出 CSV 檔案路徑 (預設: <data-dir>/export-YYYY-MM-DD.csv)')
     args = parser.parse_args()
 
     class_id = args.class_id
+    data_dir = args.data_dir
     
     tz = datetime.timezone(datetime.timedelta(hours=8))
     now = datetime.datetime.now(tz)
@@ -53,9 +55,9 @@ def main():
     
     out_path = args.out
     if not out_path:
-        out_path = f"data/export-{date_str}.csv"
+        out_path = os.path.join(data_dir, f"export-{date_str}.csv")
         
-    data_path = f"data/{class_id}.json"
+    data_path = os.path.join(data_dir, f"{class_id}.json")
     if not os.path.exists(data_path):
         print(f"錯誤：找不到資料檔 {data_path}", file=sys.stderr)
         sys.exit(1)
