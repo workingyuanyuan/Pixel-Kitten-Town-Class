@@ -42,7 +42,8 @@ def main():
     
     for fpath in docx_files:
         base_name = os.path.basename(fpath)
-        class_name = base_name.replace('成績登記表.docx', '').strip()
+        raw_class_name = base_name.replace('成績登記表.docx', '').strip()
+        class_name = f"11501-{raw_class_name}"
         
         roster = parse_docx(fpath)
         if not roster:
