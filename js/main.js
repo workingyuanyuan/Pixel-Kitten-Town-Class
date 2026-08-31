@@ -340,7 +340,7 @@ function refreshDrowsy(studentId) {
  * 通常已經在講下一件事了，這時候要能直接 Ctrl+Z。
  * ------------------------------------------------------------------- */
 function studentLabel(s) {
-  return s.name && s.name.trim() ? s.name : '座號 ' + s.seat;
+  return s.name && s.name.trim() ? `${s.seat}號 ${s.name}` : '座號 ' + s.seat;
 }
 
 function doUndo() {

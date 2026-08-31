@@ -382,9 +382,9 @@ function drawCatLabels(lctx, cats, scale) {
       lctx.stroke();
     }
 
-    // --- 姓名 + 等級，排成一行並整體置中 ---
-    // 沒有姓名時顯示座號，這是拿到真實名單之前的正常狀態。
-    const nameText = s.name && s.name.trim() ? s.name : String(s.seat);
+    // --- 座號與姓名 + 等級，排成一行並整體置中 ---
+    // 有姓名時顯示「座號. 姓名」，沒有姓名時顯示座號（拿到真實名單之前的正常狀態）。
+    const nameText = s.name && s.name.trim() ? `${s.seat}. ${s.name}` : String(s.seat);
     const lvText = lv >= CONFIG.MAX_LEVEL ? 'MAX' : `Lv.${lv}`;
 
     const nameFont = `600 ${nameSize}px "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", system-ui, sans-serif`;

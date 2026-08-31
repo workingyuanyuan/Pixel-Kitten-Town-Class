@@ -168,7 +168,7 @@ function openNoteModal() {
 
   const s = P.cat.student;
   document.getElementById('note-who').textContent =
-    s.name && s.name.trim() ? s.name : '座號 ' + s.seat;
+    s.name && s.name.trim() ? `${s.seat}號 ${s.name}` : '座號 ' + s.seat;
 
   NOTE.input.value = '';
   NOTE.modal.hidden = false;
