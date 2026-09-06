@@ -31,6 +31,19 @@
   `TX Tileset Grass.png`、`TX Tileset Stone Ground.png`、`TX Tileset Wall.png`、
   `TX Struct.png`、`TX Props.png`、`TX Plant.png`、`TX Shadow Plant.png`
 
+## 其他動物角色動畫
+
+- **作者**：Duckhive
+- **兔子**：[Bunny!](https://duckhive.itch.io/bunny)，作者標示 CC0，可用於個人、教育及商業專案。
+- **企鵝**：[FREE Animated Pixel Art Penguin](https://duckhive.itch.io/penguin)，作者允許免費使用於個人及商業專案。
+- **牛**：[Cow!](https://duckhive.itch.io/cow)，作者標示 CC0，可用於個人、教育及商業專案。
+- **鵝**：[Cobra-Chicken](https://duckhive.itch.io/goose)，作者標示 CC0，可用於個人、教育及商業專案。
+- **青蛙**：[Froggo!](https://duckhive.itch.io/froggo)，作者允許使用於個人、教育及商業專案，無須署名。
+- **取得與確認日期**：2026-09-06。
+- **使用檔案**：`assets/animals/bunny/Idle.png`、`Walk.png`；`assets/animals/penguin/Idle.png`、`Walk.png`、`Flap.png`。
+- **牛、鵝與青蛙檔案**：`assets/animals/cow/Idle.png`、`Walk.png`；`assets/animals/goose/Idle.png`、`Walk.png`、`Flap.png`；`assets/animals/frog/Idle.png`、`Jump.png`、`Fall.png`、`Land.png`。
+- PNG 保持原始素材內容，執行時用固定視窗裁切，幾何與動作設定見 `js/animals.js`。
+
 ## 介面配色（僅致謝，未包含任何檔案）
 
 - **素材包**：Sprout Lands - UI Pack
@@ -48,7 +61,7 @@
 
 ## 關於 `assets/` 資料夾
 
-版本控制中只保留程式實際會載入的 25 個圖檔。原始素材包裡的
+版本控制中只保留程式實際會載入的圖檔。原始素材包裡的
 `.aseprite` 原始檔、調色盤、Unity package、示範圖與未使用的圖塊都已移除，
 以縮小 repo 並避免不必要的再散布。
 

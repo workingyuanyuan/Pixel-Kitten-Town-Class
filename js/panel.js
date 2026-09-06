@@ -30,10 +30,12 @@ function initPanel(handlers) {
   P.onUndo = handlers.onUndo;
   P.onNote = handlers.onNote;
   P.onUndoNote = handlers.onUndoNote;
+  P.onAppearance = handlers.onAppearance;
 
   document.getElementById('panel-close').addEventListener('click', closePanel);
 
   initNoteModal();
+  initAppearanceEditor();
 
   // 點面板外面就關掉
   document.getElementById('stage-wrap').addEventListener('pointerdown', (e) => {
@@ -52,6 +54,7 @@ function panelCat() {
 }
 
 function openPanel(cat) {
+  closeAppearanceEditor();
   P.cat = cat;
   P.lastLevel = levelFromXp(cat.student.xp);
   P.levelPop = 0;
@@ -67,6 +70,7 @@ function openPanel(cat) {
 
 function closePanel() {
   if (!P.cat) return;
+  closeAppearanceEditor();
   closeNoteModal();
   P.cat = null;
   P.root.classList.remove('open');
@@ -355,6 +359,7 @@ function renderLog(student) {
  * 4 倍放大，這是面板的視覺主角。
  * ------------------------------------------------------------------- */
 function updatePanel(dt) {
+  updateAppearanceEditor(dt);
   if (!P.cat) return;
 
   if (P.levelPop > 0) {
@@ -371,28 +376,7 @@ function updatePanel(dt) {
   ctx.imageSmoothingEnabled = false;
 
   const cat = P.cat;
-  const anim = CAT_ANIMS[cat.anim.name];
-  if (!anim) return;
-
-  const scale = size / CAT_SHEET.FRAME_W;   // 128 / 32 = 4
-  const sx = (cat.anim.frame % anim.frames) * CAT_SHEET.FRAME_W;
-  const sy = anim.row * CAT_SHEET.FRAME_H;
-
-  const draw = (img) => {
-    if (!img) return;
-    if (cat.flip) {
-      ctx.save();
-      ctx.translate(size, 0);
-      ctx.scale(-1, 1);
-      ctx.drawImage(img, sx, sy, CAT_SHEET.FRAME_W, CAT_SHEET.FRAME_H, 0, 0, size, size);
-      ctx.restore();
-    } else {
-      ctx.drawImage(img, sx, sy, CAT_SHEET.FRAME_W, CAT_SHEET.FRAME_H, 0, 0, size, size);
-    }
-  };
-
-  draw(S.bundle.bases[cat.baseIndex]);
-  if (cat.accIndex >= 0) draw(S.bundle.accessories[cat.accIndex]);
+  drawCharacter(ctx, cat, S.bundle, 0, 0, size);
 
   // 滿級的光暈，跟地圖上一致
   if (POSE_LADDER[levelFromXp(cat.student.xp)].crown) {

@@ -333,6 +333,24 @@ function refreshDrowsy(studentId) {
   }
 }
 
+function saveAppearance(student, raw) {
+  if (S.readOnly || !S.dirHandle || !S.data.students.includes(student)) return false;
+  const appearance = normalizeAppearance(raw);
+  if (!appearance || !appearanceAvailable(appearance, S.bundle)) return false;
+  if (JSON.stringify(appearanceOf(student)) === JSON.stringify(appearance)) return true;
+  student.appearance = appearance;
+  const cat = S.cats.find(c => c.student === student);
+  if (cat) {
+    applyCharacterAppearance(cat, appearance);
+    enterIdle(cat);
+  }
+  S.data.updated_at = nowIso();
+  scheduleSave();
+  refreshPanel();
+  showToast('已套用' + ANIMAL_SPECIES[appearance.species].label + '形象');
+  return true;
+}
+
 /* ---------------------------------------------------------------------
  * 復原
  *
@@ -553,6 +571,7 @@ async function switchClass(id) {
 }
 
 function rebuildCats() {
+  closePanel();
   S.cats = createCats(S.data.students, S.map, S.bundle);
   // 重建之後貓的 drowsy 都是 false，要照 log 重新算一次，
   // 不然換班或重新載入檔案後，該打瞌睡的貓會站得好好的。
@@ -611,6 +630,7 @@ async function boot() {
     onUndo: (eventId) => applyUndo(eventId),
     onNote: (id, reason) => logNoteFor(id, reason),
     onUndoNote: (eventId) => undoNoteFor(eventId),
+    onAppearance: saveAppearance,
   });
   wireControls();
 
@@ -788,9 +808,11 @@ function wireControls() {
 
   /* --- 快捷鍵 --- */
   window.addEventListener('keydown', (e) => {
+    // 原生 dialog 自行處理焦點、按鈕與 Escape；不可觸發背景加分快捷鍵。
+    if (appearanceEditorOpen()) return;
     // 在輸入框裡打字時不要攔截
     const tag = e.target && e.target.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
     // 登記對話框開著時，整個畫面的快捷鍵都停用。
     // 最怕的是焦點不在輸入框，結果空白鍵直接變成加分。
@@ -818,6 +840,7 @@ function wireControls() {
       return;
     }
     if ((e.key === ' ' || e.key === 'Enter') && panelIsOpen()) {
+      if (tag === 'BUTTON') return; // 讓聚焦按鈕執行自己的動作
       const cat = panelCat();
       if (cat && !S.readOnly) award(cat.student.id, CONFIG.AWARD_VALUES[0]);
       e.preventDefault();

@@ -138,8 +138,12 @@ const FORBIDDEN_ANIMS = new Set([
   'paw_right_down', 'paw_left_down', 'paw_right_up', 'paw_left_up',
 ]);
 
+function characterAnimation(name) {
+  return CAT_ANIMS[name] || (typeof ANIMAL_ANIMS !== 'undefined' && ANIMAL_ANIMS[name]);
+}
+
 function assertAnimAllowed(name) {
-  if (!CAT_ANIMS[name]) {
+  if (!characterAnimation(name)) {
     throw new Error(`未知的動畫名稱：${name}`);
   }
   if (FORBIDDEN_ANIMS.has(name)) {
@@ -148,7 +152,7 @@ function assertAnimAllowed(name) {
       `這是刻意的安全設計，見實作計畫第 8 節。`
     );
   }
-  return CAT_ANIMS[name];
+  return characterAnimation(name);
 }
 
 /* 八方向走路：方向向量 -> 動畫名稱。dx/dy 各取 -1 / 0 / 1。 */

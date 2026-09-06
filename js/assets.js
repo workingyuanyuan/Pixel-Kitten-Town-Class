@@ -60,7 +60,14 @@ async function loadAllAssets() {
     if (!img) missing.push(CAT_ACCESSORIES[index]);
   });
 
-  // 3. 若有缺失檔案，集中印出警告訊息（一次性印出所有缺失路徑）
+  const animals = {};
+  await Promise.all(Object.entries(ANIMAL_ANIMS).map(async ([name, anim]) => {
+    if (!anim.path) return; // 組合動作共用原始影格
+    animals[name] = await loadImage(anim.path);
+    if (!animals[name]) missing.push(anim.path);
+  }));
+
+  // 若有缺失檔案，集中印出警告訊息（一次性印出所有缺失路徑）
   if (missing.length > 0) {
     console.warn(
       `[assets.js] 載入資材時有 ${missing.length} 個檔案缺失：\n` +
@@ -72,6 +79,7 @@ async function loadAllAssets() {
     tiles: tiles,
     bases: bases,
     accessories: accessories,
+    animals: animals,
     missing: missing
   };
 }
@@ -101,7 +109,7 @@ function makeAnimState(animName) {
  */
 function updateAnim(state, dtSeconds) {
   if (!state || !state.name) return false;
-  const anim = CAT_ANIMS[state.name];
+  const anim = characterAnimation(state.name);
   if (!anim || anim.frames <= 0 || anim.fps <= 0) return false;
 
   state.elapsed += dtSeconds;

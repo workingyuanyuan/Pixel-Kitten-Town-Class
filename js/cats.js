@@ -121,6 +121,7 @@ function createCats(students, mapData, bundle) {
       floats: [],           // 飄字 { text, t }
       barShown: 0,          // 進度條顯示值，用來做緩動
     };
+    applyCharacterAppearance(cat, appearanceOf(s));
     cat.anim = makeAnimState(pickIdle(cat));
     cat.barShown = xpProgress(s.xp);
     cats.push(cat);
@@ -148,6 +149,8 @@ function poseOf(cat) {
 
 /* 從該等級的閒置動畫池裡抽一個。 */
 function pickIdle(cat) {
+  const animal = animalDefinition(cat);
+  if (animal) return animal.idle;
   const pool = poseOf(cat).idle;
   return pool[Math.floor(cat.rng() * pool.length)];
 }
@@ -183,14 +186,19 @@ function updateCats(cats, dt, mapData) {
     cat.barShown += (target - cat.barShown) * Math.min(1, dt / 0.6 * 2.5);
 
     if (cat.mode === 'walk') {
-      const speed = 14; // 像素／秒，刻意很慢，不要看起來像在趕路
+      const animal = animalDefinition(cat);
+      let speed = animal ? animal.speed : 14;
+      // 兔子在落地幀停頓，位移集中在騰空幀，四幀平均速度不變。
+      if (cat.species === 'bunny') speed *= [0, 0.75, 2.25, 1][cat.anim.frame % 4];
+      if (cat.species === 'frog') speed *= animalFrame(cat.anim).travel;
       const dx = cat.targetX - cat.x;
       const dy = cat.targetY - cat.y;
       const dist = Math.hypot(dx, dy);
-      if (dist < speed * dt) {
+      if (dist <= speed * dt || dist < 0.001) {
         cat.x = cat.targetX;
         cat.y = cat.targetY;
-        enterIdle(cat);
+        // 青蛙到達目的地後先完成落地，再切換待機，避免在半空瞬間落下。
+        if (cat.species !== 'frog' || cat.anim.frame === 0) enterIdle(cat);
       } else {
         cat.x += (dx / dist) * speed * dt;
         cat.y += (dy / dist) * speed * dt;
@@ -219,26 +227,27 @@ function enterIdle(cat) {
 
 function startWalk(cat, mapData) {
   const R = CONFIG.WANDER_RADIUS;
+  const animal = animalDefinition(cat);
   if (R <= 0) { enterIdle(cat); return; }
 
   // 在錨點周圍隨機挑一格，必須可站立
   for (let attempt = 0; attempt < 8; attempt++) {
     const dc = Math.floor(cat.rng() * (R * 2 + 1)) - R;
-    const dr = Math.floor(cat.rng() * (R * 2 + 1)) - R;
+    const dr = animal ? 0 : Math.floor(cat.rng() * (R * 2 + 1)) - R;
     const c = cat.anchorCol + dc;
-    const r = cat.anchorRow + dr;
+    const r = animal ? Math.floor(cat.y / TILE_SIZE) : cat.anchorRow + dr;
     if (c < 1 || r < 1 || c >= mapData.cols - 1 || r >= mapData.rows - 1) continue;
     if (mapData.blocked[r][c]) continue;
-    if (c * TILE_SIZE === cat.x && r * TILE_SIZE === cat.y) continue;
+    if (c * TILE_SIZE === cat.x && (animal || r * TILE_SIZE === cat.y)) continue;
 
     cat.targetX = c * TILE_SIZE;
-    cat.targetY = r * TILE_SIZE;
+    cat.targetY = animal ? cat.y : r * TILE_SIZE;
     const sx = Math.sign(cat.targetX - cat.x);
     const sy = Math.sign(cat.targetY - cat.y);
-    const animName = WALK_BY_DIR[`${sx},${sy}`];
+    const animName = animal ? animal.walk : WALK_BY_DIR[`${sx},${sy}`];
     if (!animName) continue;
     setAnim(cat.anim, animName);
-    cat.flip = false; // 走路動畫本身已有八方向，翻轉會讓朝向錯亂
+    cat.flip = animal ? (animal.facing === 'right' ? sx < 0 : sx > 0) : false;
     cat.mode = 'walk';
     return;
   }
@@ -252,7 +261,9 @@ function playAward(cat, delta) {
   cat.awardFx = 0.6;
   cat.floats.push({ text: `+${delta}`, t: 0 });
   cat.mode = 'idle';
-  setAnim(cat.anim, isSitting(cat) ? AWARD_REACTION.sitting : AWARD_REACTION.standing);
+  const animal = animalDefinition(cat);
+  setAnim(cat.anim, animal ? animal.celebrate : (isSitting(cat) ? AWARD_REACTION.sitting : AWARD_REACTION.standing));
+  if (cat.species === 'frog') cat.anim = makeAnimState(animal.celebrate);
   cat.timer = 0.8;
 }
 
@@ -260,14 +271,18 @@ function playAward(cat, delta) {
  * 登記不扣分，所以畫面上不該出現任何像是被扣分的東西。 */
 function playNote(cat) {
   cat.mode = 'idle';
-  setAnim(cat.anim, isSitting(cat) ? NOTE_REACTION.sitting : NOTE_REACTION.standing);
+  const animal = animalDefinition(cat);
+  setAnim(cat.anim, animal ? animal.idle : (isSitting(cat) ? NOTE_REACTION.sitting : NOTE_REACTION.standing));
   cat.timer = 1.2;
 }
 
 function playLevelUp(cat) {
   cat.levelFx = 2.0;
-  setAnim(cat.anim, LEVELUP_ANIM);
-  cat.timer = 1.2;
+  cat.mode = 'idle';
+  const animal = animalDefinition(cat);
+  setAnim(cat.anim, animal ? animal.celebrate : LEVELUP_ANIM);
+  if (cat.species === 'frog') cat.anim = makeAnimState(animal.celebrate);
+  cat.timer = cat.species === 'frog' ? 0.8 : 1.2;
 }
 
 /* ---------------------------------------------------------------------
@@ -279,32 +294,18 @@ function drawCatsInRow(ctx, cats, bundle, row) {
   for (const cat of cats) {
     if (Math.floor(cat.y / TILE_SIZE) !== row) continue;
 
-    const base = bundle.bases[cat.baseIndex];
     let dy = cat.y;
 
     // 加分時輕輕跳一下
-    if (cat.awardFx > 0) {
+    if (cat.awardFx > 0 && cat.species !== 'frog') {
       const p = 1 - cat.awardFx / 0.6;
       dy -= Math.sin(p * Math.PI) * 4;
-    }
-
-    if (!base) {
-      // 素材缺失時畫佔位方塊，不要靜默失敗
-      ctx.fillStyle = '#ff00ff';
-      ctx.fillRect(cat.x + 8, dy + 8, 16, 16);
-      continue;
     }
 
     const dx = Math.round(cat.x);
     const dyr = Math.round(dy);
 
-    // 先畫整隻貓，再把配件疊上去。順序不能反。
-    drawCatFrame(ctx, base, cat.anim, dx, dyr, cat.flip);
-
-    if (cat.accIndex >= 0) {
-      const acc = bundle.accessories[cat.accIndex];
-      if (acc) drawCatFrame(ctx, acc, cat.anim, dx, dyr, cat.flip);
-    }
+    drawCharacter(ctx, cat, bundle, dx, dyr);
   }
 }
 

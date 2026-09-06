@@ -6,6 +6,7 @@
 <title>班級像素小鎮</title>
 <link rel="stylesheet" href="css/main.css">
 <link rel="stylesheet" href="css/panel.css">
+<link rel="stylesheet" href="css/appearance.css">
 </head>
 <body>
 
@@ -86,7 +87,41 @@
 
   <div id="panel-log-head">最近的紀錄</div>
   <ul id="panel-log"></ul>
+  <div id="panel-footer">
+    <button id="panel-appearance" class="tbtn" type="button">編輯形象</button>
+  </div>
 </aside>
+
+<dialog id="appearance-dialog" aria-labelledby="appearance-title" aria-describedby="appearance-who">
+  <div class="appearance-heading">
+    <div><h2 id="appearance-title">我的小鎮形象</h2><p id="appearance-who"></p></div>
+    <button id="appearance-close" class="tbtn" type="button" aria-label="關閉形象編輯器">×</button>
+  </div>
+  <div class="appearance-layout">
+    <div class="appearance-showcase">
+      <div class="appearance-stage"><canvas id="appearance-preview" width="192" height="192" role="img" aria-label="動態形象預覽"></canvas></div>
+      <div id="appearance-actions" class="appearance-actions" role="group" aria-label="預覽動作">
+        <button type="button" data-action="idle" aria-pressed="true">待機</button>
+        <button type="button" data-action="walk" aria-pressed="false">走路</button>
+        <button type="button" data-action="celebrate" aria-pressed="false">加分</button>
+      </div>
+      <p class="appearance-caption">選一個喜歡的模樣，住進小鎮。</p>
+    </div>
+    <div class="appearance-options">
+      <fieldset><legend>動物形象</legend><div id="appearance-species" class="appearance-species"></div></fieldset>
+      <div id="appearance-cat-options">
+        <fieldset><legend>毛色</legend><div id="appearance-bases" class="appearance-bases"></div></fieldset>
+        <label class="appearance-label" for="appearance-accessory">配件</label>
+        <select id="appearance-accessory" class="tselect"></select>
+      </div>
+    </div>
+  </div>
+  <p id="appearance-status" role="status" aria-live="polite"></p>
+  <div class="appearance-footer">
+    <button id="appearance-cancel" class="modal-btn modal-btn-grey" type="button">取消</button>
+    <button id="appearance-apply" class="modal-btn modal-btn-main" type="button">套用形象</button>
+  </div>
+</dialog>
 
 <!-- 登記事由的對話框。置中蓋在畫面上，確認才會寫入紀錄。 -->
 <div id="note-modal" hidden>
@@ -115,6 +150,7 @@
 
 <script src="js/config.js"></script>
 <script src="js/anims.js"></script>
+<script src="js/animals.js"></script>
 <script src="js/tileset.js"></script>
 <script src="js/assets.js"></script>
 <script src="js/storage.js"></script>
@@ -122,6 +158,7 @@
 <script src="js/map.js"></script>
 <script src="js/cats.js"></script>
 <script src="js/panel.js"></script>
+<script src="js/appearance.js"></script>
 <script src="js/mapedit.js"></script>
 <script src="js/main.js"></script>
 </body>

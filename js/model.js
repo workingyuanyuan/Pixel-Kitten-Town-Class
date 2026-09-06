@@ -57,6 +57,49 @@ function createFreshData(classId, count) {
 }
 
 /* ---------------------------------------------------------------------
+ * 外觀規格化（Appearance Normalization）
+ *
+ * 支援物種：cat、bunny、penguin、cow、goose、frog
+ * 貓咪底圖 base 必須為 CAT_BASES 內的整數索引，否則為 0；
+ * 配件 accessory 必須為 -1..CAT_ACCESSORIES.length-1 內的整數，否則為 -1。
+ * 非貓物種固定為 base: 0, accessory: -1。
+ * ------------------------------------------------------------------- */
+function normalizeAppearance(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return null;
+  }
+
+  const species = raw.species;
+  if (!['cat', 'bunny', 'penguin', 'cow', 'goose', 'frog'].includes(species)) {
+    return null;
+  }
+
+  if (species === 'cat') {
+    const basesLen = CAT_BASES.length;
+    const accsLen = CAT_ACCESSORIES.length;
+
+    const base = (Number.isInteger(raw.base) && raw.base >= 0 && raw.base < basesLen)
+      ? (raw.base === 0 ? 0 : raw.base)
+      : 0;
+    const accessory = (Number.isInteger(raw.accessory) && raw.accessory >= -1 && raw.accessory < accsLen)
+      ? (raw.accessory === 0 ? 0 : raw.accessory)
+      : -1;
+
+    return {
+      species: 'cat',
+      base: base,
+      accessory: accessory,
+    };
+  }
+
+  return {
+    species: species,
+    base: 0,
+    accessory: -1,
+  };
+}
+
+/* ---------------------------------------------------------------------
  * Schema 容錯
  *
  * 老師會手改這個檔案，所以缺欄位要補預設值、型別錯誤要修正，
@@ -115,13 +158,20 @@ function normalizeData(parsed, classId) {
       xp = CONFIG.XP_MAX;
     }
 
-    students.push({
+    const student = {
       id: id,
       seat: Math.floor(seat),
       name: typeof s.name === 'string' ? s.name : '',
       xp: Math.floor(xp),
       note: typeof s.note === 'string' ? s.note : '',
-    });
+    };
+
+    const appearance = normalizeAppearance(s.appearance);
+    if (appearance !== null) {
+      student.appearance = appearance;
+    }
+
+    students.push(student);
   });
 
   const rawLog = Array.isArray(src.log) ? src.log : [];
