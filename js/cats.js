@@ -3,8 +3,8 @@
  * =====================================================================
  *
  * 設計原則（見實作計畫第 6、8 節）：
- *   - 同一個學生每次開啟都在同一位置、同一外觀。位置由 student.id 雜湊
- *     決定，與分數完全無關，不會出現「高分的貓聚在某一區」。
+ *   - 同一份名單與地圖每次開啟都有相同位置。先由 student.id 雜湊產生
+ *     分散落點，再按座號由上到下、同列由左到右分配，與分數完全無關。
  *   - 貓只在自己的錨點周圍 WANDER_RADIUS 格內徘徊，走遠了會自己回來。
  *   - 姿勢由等級決定，且整條階梯只有正向差異：最低階是坐著理毛，
  *     不出現趴臥、睡覺、昏倒。禁用清單由 anims.js 的 assertAnimAllowed 把關。
@@ -25,7 +25,7 @@ function hash32(str) {
  *
  * 每個學生從自己 id 的雜湊算出一個起始候選格，若不合格（被擋住、
  * 離別人太近）就沿著一個同樣由雜湊決定的順序往下找。
- * 全程不使用 Math.random，因此結果完全可重現。
+ * 保留這些分散落點，再依座號分配。全程不使用 Math.random，結果可重現。
  * ------------------------------------------------------------------- */
 function placeCats(students, mapData) {
   const placed = [];
@@ -76,8 +76,14 @@ function placeCats(students, mapData) {
     placed.push({ id: s.id, col: chosen.col, row: chosen.row });
   }
 
+  // 只重配落點上的學生，保留原本每一個座標與間距。
+  placed.sort((a, b) => a.row - b.row || a.col - b.col);
+  const bySeat = ordered.slice().sort((a, b) => a.seat - b.seat);
   const byId = {};
-  for (const p of placed) byId[p.id] = p;
+  for (let i = 0; i < bySeat.length; i++) {
+    const id = bySeat[i].id;
+    byId[id] = { id, col: placed[i].col, row: placed[i].row };
+  }
   return byId;
 }
 
