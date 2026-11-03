@@ -31,6 +31,10 @@ function initPanel(handlers) {
   P.onNote = handlers.onNote;
   P.onUndoNote = handlers.onUndoNote;
   P.onAppearance = handlers.onAppearance;
+  P.onToggleHelper = handlers.onToggleHelper;
+  document.getElementById('panel-helper').addEventListener('click', () => {
+    if (P.cat && P.onToggleHelper) P.onToggleHelper(P.cat.student);
+  });
 
   document.getElementById('panel-close').addEventListener('click', closePanel);
 
@@ -213,6 +217,13 @@ function refreshPanel() {
     s.name && s.name.trim() ? s.name : '座號 ' + s.seat;
   document.getElementById('panel-seat').textContent =
     s.name && s.name.trim() ? '座號 ' + s.seat : '';
+  const helperBtn = document.getElementById('panel-helper');
+  const helperLabel = s.isHelper ? '取消小老師標記' : '設為小老師';
+  helperBtn.textContent = s.isHelper ? '★' : '☆';
+  helperBtn.setAttribute('aria-pressed', String(s.isHelper === true));
+  helperBtn.setAttribute('aria-label', helperLabel);
+  helperBtn.title = S.readOnly ? '連接資料夾後可設定小老師' : helperLabel;
+  helperBtn.disabled = S.readOnly;
 
   document.getElementById('panel-level').textContent = maxed ? 'MAX' : 'Lv.' + lv;
   document.getElementById('panel-title').textContent = CONFIG.LEVEL_TITLES[lv] || '';

@@ -413,10 +413,11 @@ function drawCatLabels(lctx, cats, scale, uiMin = 2) {
 
     lctx.font = nameFont;
     const nameW = lctx.measureText(nameText).width;
+    const helperW = s.isHelper ? lctx.measureText('★').width + gap : 0;
     lctx.font = lvFont;
     const lvW = lctx.measureText(lvText).width;
 
-    const totalW = nameW + gap + lvW;
+    const totalW = helperW + nameW + gap + lvW;
     let penX = cx - totalW / 2;
 
     lctx.textAlign = 'left';
@@ -424,6 +425,12 @@ function drawCatLabels(lctx, cats, scale, uiMin = 2) {
     lctx.font = nameFont;
     lctx.strokeStyle = 'rgba(24, 20, 28, 0.92)';
     lctx.lineWidth = Math.max(3, nameSize * 0.34);
+    if (s.isHelper) {
+      lctx.strokeText('★', penX, nameY);
+      lctx.fillStyle = '#ffd666';
+      lctx.fillText('★', penX, nameY);
+      penX += helperW;
+    }
     lctx.strokeText(nameText, penX, nameY);
     lctx.fillStyle = pose.crown ? '#ffd666' : '#ffffff';
     lctx.fillText(nameText, penX, nameY);

@@ -231,6 +231,20 @@ function watchStageSize() {
  * 資料載入
  * ------------------------------------------------------------------- */
 
+/* 上次記住的資料夾已經不存在：忘掉它，退回唯讀假資料，請老師重新選。 */
+async function forgetMissingDir(handle) {
+  await idbDelete(IDB_KEY);
+  S.dirHandle = null;
+  S.pendingHandle = null;
+  await loadFallbackData();
+  setSaveState('尚未連接資料夾');
+  showBanner(
+    `找不到上次使用的資料夾「${handle.name}」，它可能被移動、改名或刪除了。
+` +
+    `請按上方「連接資料夾」重新選擇資料夾。`, 'warn'
+  );
+}
+
 /* 還沒連接資料夾時，用範例檔或座號假資料先把畫面撐起來，全程唯讀。 */
 async function loadFallbackData() {
   S.readOnly = true;
@@ -432,6 +446,16 @@ function refreshDrowsy(studentId) {
     cat.drowsy = next;
     enterIdle(cat);
   }
+}
+
+function toggleHelper(student) {
+  if (S.readOnly || !S.dirHandle || !S.data || !S.data.students.includes(student)) return false;
+  student.isHelper = !student.isHelper;
+  S.data.updated_at = nowIso();
+  scheduleSave();
+  refreshPanel();
+  showToast(`${studentLabel(student)}：${student.isHelper ? '已設為小老師' : '已取消小老師標記'}`);
+  return true;
 }
 
 function saveAppearance(student, raw) {
@@ -766,6 +790,7 @@ async function boot() {
     onNote: (id, reason) => logNoteFor(id, reason),
     onUndoNote: (eventId) => undoNoteFor(eventId),
     onAppearance: saveAppearance,
+    onToggleHelper: toggleHelper,
   });
   wireControls();
   initWeather();
@@ -790,7 +815,9 @@ async function boot() {
     await loadFallbackData();
   } else {
     const { handle, needsGesture } = await restoreDataDir();
-    if (handle && !needsGesture) {
+    if (handle && !needsGesture && !(await dirStillExists(handle))) {
+      await forgetMissingDir(handle);
+    } else if (handle && !needsGesture) {
       S.dirHandle = handle;
       await adoptDirectory();
     } else {
@@ -821,6 +848,12 @@ function wireControls() {
         if (!ok) { setSaveState('未授權'); return; }
         handle = S.pendingHandle;
         S.pendingHandle = null;
+        if (!(await dirStillExists(handle))) {
+          await forgetMissingDir(handle);
+          rebuildCats();
+          refreshControls();
+          return;
+        }
       } else {
         handle = await pickDataDir();
       }

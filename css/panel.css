@@ -81,11 +81,51 @@
 }
 
 /* ---------------- 姓名與等級 ---------------- */
+#panel-name-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+#panel-helper {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 2px solid #a58c70;
+  border-radius: 10px;
+  background: #fff7e5;
+  color: #7a6455;
+  font-size: 30px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+#panel-helper[aria-pressed="true"] {
+  color: #8b5800;
+  background: #ffe59a;
+  border-color: #b47b18;
+  box-shadow: 0 0 10px #ffd66680;
+}
+
+#panel-helper:focus-visible {
+  outline: 3px solid #4f7134;
+  outline-offset: 3px;
+}
+
+#panel-helper:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 #panel-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-size: 26px;
   font-weight: 800;
   text-align: center;
-  margin-top: 8px;
   text-shadow: 0 1px 0 var(--cream);
 }
 

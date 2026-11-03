@@ -116,6 +116,18 @@ async function restoreDataDir() {
   }
 }
 
+/* 記住的資料夾可能已經被搬走、改名或刪除。handle 還在、授權也還在，
+ * 但對它做任何操作都會丟 NotFoundError。先探一下，免得之後的寫入整個炸掉。 */
+async function dirStillExists(handle) {
+  try {
+    await handle.entries().next();
+    return true;
+  } catch (e) {
+    if (e && e.name === 'NotFoundError') return false;
+    throw e;
+  }
+}
+
 /* 由點擊觸發，向瀏覽器重新請求授權。 */
 async function confirmDataDir(handle) {
   const state = await handle.requestPermission({ mode: 'readwrite' });

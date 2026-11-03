@@ -45,7 +45,7 @@ function nowIso() {
 function createFreshData(classId, count) {
   const students = [];
   for (let i = 0; i < count; i++) {
-    students.push({ id: newStudentId(), seat: i + 1, name: '', xp: 0, note: '' });
+    students.push({ id: newStudentId(), seat: i + 1, name: '', xp: 0, note: '', isHelper: false });
   }
   return {
     version: DATA_VERSION,
@@ -164,6 +164,7 @@ function normalizeData(parsed, classId) {
       name: typeof s.name === 'string' ? s.name : '',
       xp: Math.floor(xp),
       note: typeof s.note === 'string' ? s.note : '',
+      isHelper: s.isHelper === true,
     };
 
     const appearance = normalizeAppearance(s.appearance);
