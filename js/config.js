@@ -81,6 +81,31 @@ const CONFIG = {
   // 改成 false 就只看得到長度，看不到確切分數。
   SHOW_XP_NUMBERS: true,
 
+  // 目前全班分數最高的學生，貓的身後會有金色光環、名字變成金色。
+  // 同分的人一起有；全班都還是 0 分時誰都沒有。
+  // 不想在畫面上出現這種比較就改成 false。
+  TOP_HALO: true,
+
+  // 今日之星：這節課（打開網頁之後）加分最多的學生，貓的頭上會有一顆星星。
+  // 只算這次開著網頁時加的分，重新整理或重開網頁就從頭算，
+  // 所以每節課每個人都有機會。同分的人一起有；還沒有人加分時誰都沒有。
+  TODAY_STAR: true,
+
+  // 全班共同目標：工具列右邊的長條，全班的分數加起來越多就越滿。
+  // 長條上的圓圈還沒達到時是灰色，達到之後變彩色。
+  //   at   全班滿分的幾成（0.25 = 四分之一）。全班滿分 = 人數 × XP_MAX，
+  //        所以人多人少的班級難度一樣。
+  //   icon 圓圈裡的圖示
+  //   name 滑鼠移上去看到的名稱。可以改成班上約好的獎勵，例如「看一部影片」。
+  // 不想要這條就改成 []。
+  CLASS_GOAL: [
+    { at: 0.1,  icon: '🌱', name: '新芽' },
+    { at: 0.25, icon: '🌷', name: '花圃' },
+    { at: 0.45, icon: '⛲', name: '噴泉' },
+    { at: 0.7,  icon: '🌈', name: '彩虹' },
+    { at: 1,    icon: '🎆', name: '煙火' },
+  ],
+
 
   /* ---------------- 地圖 ---------------- */
 
@@ -161,27 +186,58 @@ const CONFIG = {
  *   idle       閒置時隨機抽選的動畫（權重相同）
  *   canWalk    是否會在錨點周圍走動
  *   walkChance 每次要換動作時，選擇「走一段」的機率
- *   sparkle    腳邊是否偶爾冒出小星星
- *   crown      頭上是否戴王冠
+ *   flourish   其他動物閒置時會不會穿插招牌動作（企鵝、鵝拍翅，兔子、青蛙原地跳）
+ *
+ * 身邊的特效（小芽、愛心、光圈…）另外寫在下面的 LEVEL_FX。
  * ------------------------------------------------------------------- */
 const POSE_LADDER = [
   // Lv 0 —— 坐著。自在，不是頹廢。
-  { idle: ['wash_sit', 'yawn_sit'],                     canWalk: false, walkChance: 0,    sparkle: false, crown: false },
+  { idle: ['wash_sit', 'yawn_sit'],                         canWalk: false, walkChance: 0,    flourish: false },
   // Lv 1 —— 站起來了。第一次升級最明顯的變化。
-  { idle: ['rest_2', 'wash_stand'],                     canWalk: false, walkChance: 0,    sparkle: false, crown: false },
-  // Lv 2–3 —— 開始走動。
-  { idle: ['rest_2', 'wash_stand', 'yawn_stand'],       canWalk: true,  walkChance: 0.25, sparkle: false, crown: false },
-  { idle: ['rest_2', 'wash_stand', 'yawn_stand'],       canWalk: true,  walkChance: 0.35, sparkle: false, crown: false },
-  // Lv 4–6 —— 走得更勤，多了抓癢等小動作。
-  { idle: ['rest_2', 'wash_stand', 'scratch_r'],        canWalk: true,  walkChance: 0.45, sparkle: false, crown: false },
-  { idle: ['rest_2', 'wash_stand', 'scratch_r'],        canWalk: true,  walkChance: 0.50, sparkle: false, crown: false },
-  { idle: ['rest_2', 'wash_stand', 'scratch_l'],        canWalk: true,  walkChance: 0.55, sparkle: false, crown: false },
-  // Lv 7–9 —— 活潑，腳邊開始冒小星星。
-  { idle: ['rest_2', 'scratch_r', 'hind_legs'],         canWalk: true,  walkChance: 0.60, sparkle: true,  crown: false },
-  { idle: ['rest_2', 'scratch_l', 'hind_legs'],         canWalk: true,  walkChance: 0.65, sparkle: true,  crown: false },
-  { idle: ['rest_2', 'scratch_r', 'hind_legs'],         canWalk: true,  walkChance: 0.70, sparkle: true,  crown: false },
-  // Lv 10 —— 滿級。王冠 + 持續微光。
-  { idle: ['rest_2', 'hind_legs', 'scratch_l'],         canWalk: true,  walkChance: 0.70, sparkle: true,  crown: true  },
+  { idle: ['rest_2', 'wash_stand'],                         canWalk: false, walkChance: 0,    flourish: false },
+  // Lv 2 —— 開始走動。
+  { idle: ['rest_2', 'wash_stand', 'yawn_stand'],           canWalk: true,  walkChance: 0.25, flourish: false },
+  // Lv 3–6 —— 會用後腳站起來，其他動物也開始拍翅、原地跳。
+  { idle: ['rest_2', 'wash_stand', 'hind_legs'],            canWalk: true,  walkChance: 0.35, flourish: true  },
+  { idle: ['rest_2', 'wash_stand', 'scratch_r', 'hind_legs'], canWalk: true, walkChance: 0.45, flourish: true },
+  { idle: ['rest_2', 'wash_stand', 'scratch_r', 'hind_legs'], canWalk: true, walkChance: 0.50, flourish: true },
+  { idle: ['rest_2', 'wash_stand', 'scratch_l', 'hind_legs'], canWalk: true, walkChance: 0.55, flourish: true },
+  // Lv 7–10 —— 活潑。
+  { idle: ['rest_2', 'scratch_r', 'hind_legs'],             canWalk: true,  walkChance: 0.60, flourish: true  },
+  { idle: ['rest_2', 'scratch_l', 'hind_legs'],             canWalk: true,  walkChance: 0.65, flourish: true  },
+  { idle: ['rest_2', 'scratch_r', 'hind_legs'],             canWalk: true,  walkChance: 0.70, flourish: true  },
+  { idle: ['rest_2', 'hind_legs', 'scratch_l'],             canWalk: true,  walkChance: 0.70, flourish: true  },
+];
+
+/* ---------------------------------------------------------------------
+ * 等級特效 —— 每升一級就多一樣東西，而且一直留在身邊
+ *
+ * 沒有只播一次的升級動畫：解鎖之後，這些效果會一直在地圖上（和面板裡）
+ * 循環播放，學生隨時抬頭都看得到自己累積了什麼。貓與其他動物都一樣。
+ * 畫法在 catfx.js；level 改了，解鎖順序就跟著改。
+ *
+ * 有幾項是前一項的升級版：
+ *   flowers 取代 sprout、notes 讓 hearts 冒得更勤、
+ *   butterflies 多一隻蝴蝶、goldStars 讓 stars 變多變金。
+ *
+ * 腳下只留影子：不在角色正下方畫光圈之類的東西，花園長在兩側。
+ *
+ * 打瞌睡（見下面的 DROWSY_IDLE）只改變動作，特效全部照樣留著 ——
+ * 學生賺到的東西不會因為被登記而收走。
+ *
+ * 另外兩種光環不看等級：全班最高分（TOP_HALO）與今日之星（TODAY_STAR）。
+ * ------------------------------------------------------------------- */
+const LEVEL_FX = [
+  { level: 1,  key: 'sprout',    label: '家門口冒出小芽' },
+  { level: 2,  key: 'hearts',    label: '偶爾冒出愛心' },
+  { level: 3,  key: 'flowers',   label: '小芽開花' },
+  { level: 4,  key: 'notes',     label: '愛心和音符冒得更勤' },
+  { level: 5,  key: 'sunflower', label: '家門口長出向日葵' },
+  { level: 6,  key: 'stars',     label: '身邊閃爍的星星' },
+  { level: 7,  key: 'butterfly', label: '蝴蝶相伴' },
+  { level: 8,  key: 'butterflies', label: '第二隻蝴蝶' },
+  { level: 9,  key: 'goldStars', label: '金色星星' },
+  { level: 10, key: 'orbit',     label: '環繞的金色光點' },
 ];
 
 /* ---------------------------------------------------------------------
@@ -208,7 +264,7 @@ const NOTE_REACTION = { sitting: 'yawn_sit', standing: 'yawn_stand' };
 /* 加分的即時反應動畫：依當下是坐姿還是站姿挑一個。 */
 const AWARD_REACTION = { sitting: 'meow_sit', standing: 'meow_stand' };
 
-/* 升級的招牌動作。 */
+/* 升級當下的招牌動作。Lv 3 起它也是閒置動作之一，不會只出現這一次。 */
 const LEVELUP_ANIM = 'hind_legs';
 
 /* ---------------------------------------------------------------------

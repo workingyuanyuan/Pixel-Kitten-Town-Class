@@ -84,5 +84,35 @@ check('log 全域仍有 3 筆', d.log.length === 3);
 const ids = new Set(d.log.map(e => e.id));
 check('每筆 log 的 id 唯一', ids.size === 3);
 
+console.log('\n=== 今日之星：這次開網頁之後的淨加分 ===');
+d = ctx.createFreshData('t', 3);
+const g1 = d.students[0].id, g2 = d.students[1].id;
+ctx.awardXp(d, g1, 1);
+d.log[0].ts = '2020-01-01T08:00:00+08:00';   // 上一節課加的分
+const since = Date.now() - 1000;
+ctx.awardXp(d, g1, 1); ctx.awardXp(d, g2, 1); ctx.awardXp(d, g2, 1);
+let gains = ctx.gainsSince(d, since);
+check('上一節課的分不算', gains[g1] === 1, gains);
+check('這節課的分照算', gains[g2] === 2, gains);
+check('沒有加分的學生不出現', !(d.students[2].id in gains), gains);
+const lastG2 = d.log[d.log.length - 1].id;
+const u = ctx.undoEvent(d, lastG2);
+gains = ctx.gainsSince(d, since);
+check('復原會扣回去', gains[g2] === 1, gains);
+ctx.cancelUndo(d, u.undoEvent.id);
+gains = ctx.gainsSince(d, since);
+check('取消復原再加回來', gains[g2] === 2, gains);
+ctx.logNote(d, g1, '吵鬧');
+check('登記不影響今日之星', ctx.gainsSince(d, since)[g1] === 1);
+
+d = ctx.createFreshData('t', 2);
+const h1 = d.students[0].id;
+ctx.awardXp(d, h1, 1); ctx.awardXp(d, h1, 1);
+d.log[0].ts = ''; d.log[1].ts = 'not a date';
+check('沒有時間或時間看不懂的紀錄不算', !(h1 in ctx.gainsSince(d, Date.now() - 1000)));
+ctx.awardXp(d, h1, 1);
+const sameSecond = Date.parse(d.log[2].ts);
+check('跟開網頁同一秒加的分照算', ctx.gainsSince(d, sameSecond)[h1] === 1);
+
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

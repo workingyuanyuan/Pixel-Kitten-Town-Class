@@ -31,12 +31,15 @@ const ANIMAL_ANIMS = {
 
 const ANIMAL_SPECIES = {
   cat: { label: '貓咪' },
-  bunny: { label: '兔子', idle: 'bunny_idle', walk: 'bunny_walk', celebrate: 'bunny_walk', speed: 16 },
-  penguin: { label: '企鵝', idle: 'penguin_idle', walk: 'penguin_walk', celebrate: 'penguin_flap', speed: 14 },
+  bunny: { label: '兔子', idle: 'bunny_idle', walk: 'bunny_walk', celebrate: 'bunny_walk', flourish: 'bunny_walk', speed: 16 },
+  penguin: { label: '企鵝', idle: 'penguin_idle', walk: 'penguin_walk', celebrate: 'penguin_flap', flourish: 'penguin_flap', speed: 14 },
+  // 牛的素材只有待機與走路，招牌動作靠 LEVEL_FX 的特效補上
   cow: { label: '牛', idle: 'cow_idle', walk: 'cow_walk', celebrate: 'cow_idle', speed: 12, facing: 'right' },
-  goose: { label: '鵝', idle: 'goose_idle', walk: 'goose_walk', celebrate: 'goose_flap', speed: 14, facing: 'right' },
-  frog: { label: '青蛙', idle: 'frog_idle', walk: 'frog_hop', celebrate: 'frog_hop', speed: 16 },
+  goose: { label: '鵝', idle: 'goose_idle', walk: 'goose_walk', celebrate: 'goose_flap', flourish: 'goose_flap', speed: 14, facing: 'right' },
+  frog: { label: '青蛙', idle: 'frog_idle', walk: 'frog_hop', celebrate: 'frog_hop', flourish: 'frog_hop', speed: 16 },
 };
+/* flourish：Lv 3 起穿插在待機之間的招牌動作（見 config.js 的 POSE_LADDER）。
+ * 待機時不會位移，兔子、青蛙就是原地跳。 */
 
 function animalFrame(state) {
   const animation = ANIMAL_ANIMS[state.name];

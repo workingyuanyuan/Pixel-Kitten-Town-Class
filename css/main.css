@@ -83,6 +83,88 @@ html, body {
 #status { font-weight: 600; }
 #save-state { margin-left: auto; min-width: 7em; text-align: right; }
 
+/* ---------------- 全班共同目標 ----------------
+   工具列右邊的空位。圓圈還沒達到時灰色，達到之後彩色並輕輕發亮。 */
+
+#class-goal {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: min(900px, 55vw);
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#class-goal[hidden] { display: none; }
+/* 目標條在的時候由它靠右，存檔狀態緊跟在後 */
+#class-goal:not([hidden]) ~ #save-state { margin-left: 0; }
+
+#goal-track {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 200px;         /* 再窄的話 10% 與 25% 的圓圈會疊在一起 */
+  height: 12px;
+  margin: 0 14px 0 4px;    /* 頭尾的圓圈有一半會凸出去 */
+  background: #b99b78;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.28);
+}
+
+#goal-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 6px;
+  background: linear-gradient(#ffe08a, #f0b93f);
+  transition: width 600ms ease-out;
+}
+
+.goal-ms {
+  position: absolute;
+  top: 50%;
+  width: 28px;
+  height: 28px;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  line-height: 1;
+  background: #d8cbb6;
+  border: 2px solid #a8957d;
+  border-radius: 50%;
+  filter: grayscale(1);
+  opacity: 0.7;
+  cursor: default;
+}
+
+.goal-ms.on {
+  background: var(--cream);
+  border-color: #e0a83c;
+  filter: none;
+  opacity: 1;
+  animation: goal-glow 2.4s ease-in-out infinite;
+}
+
+@keyframes goal-glow {
+  0%, 100% { box-shadow: 0 0 0 rgba(255, 214, 102, 0); }
+  50%      { box-shadow: 0 0 10px rgba(255, 214, 102, 0.95); }
+}
+
+#goal-num { font-weight: 600; white-space: nowrap; }
+
+/* 視窗太窄時先收起來，按鈕比較重要 */
+@media (max-width: 1000px) {
+  #class-goal { display: none; }
+  #class-goal ~ #save-state { margin-left: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .goal-ms.on { animation: none; box-shadow: 0 0 6px rgba(255, 214, 102, 0.8); }
+  #goal-fill { transition: none; }
+}
+
 /* ---------------- 遊戲風按鈕 ----------------
    厚底邊 + 按下時整顆下沉，是最省事也最可靠的「可按」手感。 */
 

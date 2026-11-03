@@ -15,6 +15,10 @@ const S = {
   scale: 2,
   dpr: 1,
   lastT: 0,
+  // 這次打開網頁的時間。今日之星只算這之後加的分，重新整理就重來。
+  // 紀錄的時間只到秒（見 model.js 的 nowIso），這裡也捨去到秒，
+  // 不然開網頁那一秒內加的分會被漏掉。
+  sessionStart: Math.floor(Date.now() / 1000) * 1000,
 
   // 畫面 = 地圖加外圍的郊外（layout() 裡用 composeView 組出來）
   view: null,
@@ -385,6 +389,7 @@ function award(studentId, delta) {
   }
   // 加分會讓加分次數增加，可能剛好把瞌睡狀態解除掉
   refreshDrowsy(studentId);
+  refreshTodayStar();
   if (panelIsOpen() && panelCat() && panelCat().student.id === studentId) {
     refreshPanel();
     if (result.leveledUp) flashLevelUp(result.toLevel);
@@ -519,10 +524,9 @@ function applyUndo(eventId) {
 
 /* 資料改動之後統一要做的事：更新畫面、面板、存檔。 */
 function afterMutation(studentId) {
-  const cat = S.cats.find((c) => c.student.id === studentId);
-  // 降級不做任何懲罰表現，安靜地改數字就好（見實作計畫第 7 節）。
-  if (cat) cat.levelFx = 0;
+  // 降級不做任何懲罰表現，特效照新的等級安靜地少一樣就好（見實作計畫第 7 節）。
   refreshDrowsy(studentId);
+  refreshTodayStar();
   if (panelIsOpen() && panelCat() && panelCat().student.id === studentId) refreshPanel();
   scheduleSave();
   refreshControls();
@@ -651,6 +655,50 @@ function refreshControls() {
     : (S.dirHandle ? '資料檔有問題，目前唯讀' : '尚未連接資料夾');
 
   setStatus(`${S.data ? S.data.students.length : 0} 位學生`);
+  refreshClassGoal();
+}
+
+/* ---------------------------------------------------------------------
+ * 全班共同目標
+ *
+ * 全班分數加總 ÷ 全班滿分（人數 × XP_MAX）。只看大家一起累積了多少，
+ * 不看誰多誰少，所以長條上不會出現任何學生的名字。
+ * ------------------------------------------------------------------- */
+function buildClassGoal() {
+  // 設定檔是老師手改的，寫錯的那一項略過就好，不能讓整個網頁開不起來
+  const raw = Array.isArray(CONFIG.CLASS_GOAL) ? CONFIG.CLASS_GOAL : [];
+  const goals = raw.filter((g) => g && Number.isFinite(Number(g.at)));
+  if (goals.length < raw.length) console.warn('CLASS_GOAL 有幾項格式不對，已略過。');
+  const wrap = document.getElementById('class-goal');
+  wrap.hidden = goals.length === 0;
+  const track = document.getElementById('goal-track');
+  for (const g of goals) {
+    const at = Math.max(0, Math.min(1, Number(g.at)));
+    const el = document.createElement('span');
+    el.className = 'goal-ms';
+    el.textContent = g.icon || '★';
+    el.dataset.at = at;
+    el.dataset.name = g.name || '';
+    el.style.left = at * 100 + '%';
+    track.appendChild(el);
+  }
+}
+
+function refreshClassGoal() {
+  const students = S.data ? S.data.students : [];
+  const max = students.length * CONFIG.XP_MAX;
+  let total = 0;
+  for (const s of students) total += s.xp;
+  const p = max > 0 ? total / max : 0;
+
+  document.getElementById('goal-fill').style.width = p * 100 + '%';
+  document.getElementById('goal-num').textContent = `${total} / ${max}`;
+  for (const el of document.querySelectorAll('#goal-track .goal-ms')) {
+    const need = Math.ceil(Number(el.dataset.at) * max);
+    const on = max > 0 && total >= need;
+    el.classList.toggle('on', on);
+    el.title = `${el.dataset.name}：全班累積 ${need} 分${on ? '（達成）' : ''}`;
+  }
 }
 
 /* 把資料夾裡找到的班級填進下拉選單。 */
@@ -710,6 +758,22 @@ function rebuildCats() {
   // 重建之後貓的 drowsy 都是 false，要照 log 重新算一次，
   // 不然換班或重新載入檔案後，該打瞌睡的貓會站得好好的。
   refreshDrowsy(null);
+  refreshTodayStar();
+}
+
+/* 今日之星：這次打開網頁之後淨加分最多的學生（可能好幾個人同分）。
+ * 只在資料變動時重算，算好的結果放在貓身上給畫面與面板用。 */
+function refreshTodayStar() {
+  if (!S.data || !S.cats) return;
+  const gains = gainsSince(S.data, S.sessionStart);
+  let best = 0;
+  for (const cat of S.cats) best = Math.max(best, gains[cat.student.id] || 0);
+  for (const cat of S.cats) {
+    cat.sessionGain = gains[cat.student.id] || 0;
+    cat.isStar = CONFIG.TODAY_STAR !== false && best > 0 && cat.sessionGain === best;
+  }
+  // 別人加分或復原也可能改變面板上這位的今日之星
+  if (panelIsOpen() && panelCat()) refreshPanel();
 }
 
 /* ---------------------------------------------------------------------
@@ -793,6 +857,7 @@ async function boot() {
     onToggleHelper: toggleHelper,
   });
   wireControls();
+  buildClassGoal();
   initWeather();
 
   S.bundle = await loadAllAssets();

@@ -279,6 +279,21 @@ function awardXp(data, studentId, delta) {
   };
 }
 
+/* 從 sinceMs 這個時間點之後，每位學生淨加了幾分（今日之星用）。
+ * 加分、復原、取消復原都算進去，所以按錯再復原會互相抵銷。
+ * 沒有時間或時間看不懂的舊紀錄一律不算。
+ * 回傳 { 學生 id: 分數 }，沒有變動的學生不會出現。 */
+function gainsSince(data, sinceMs) {
+  const gains = {};
+  for (const e of data.log) {
+    if (!e.delta) continue;
+    const t = Date.parse(e.ts);
+    if (!Number.isFinite(t) || t < sinceMs) continue;
+    gains[e.student_id] = (gains[e.student_id] || 0) + e.delta;
+  }
+  return gains;
+}
+
 /* 是否已經滿分（介面用來把加分按鈕變灰）。 */
 function isMaxed(student) {
   return student.xp >= CONFIG.XP_MAX;

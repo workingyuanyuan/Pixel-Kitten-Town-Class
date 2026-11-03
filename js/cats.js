@@ -8,6 +8,7 @@
  *   - 貓只在自己的錨點周圍 WANDER_RADIUS 格內徘徊，走遠了會自己回來。
  *   - 姿勢由等級決定，且整條階梯只有正向差異：最低階是坐著理毛，
  *     不出現趴臥、睡覺、昏倒。禁用清單由 anims.js 的 assertAnimAllowed 把關。
+ *   - 身邊的等級特效（小芽、愛心、光圈…）畫在 catfx.js。
  * ===================================================================== */
 
 /* FNV-1a 32 位元雜湊。同一個字串永遠得到同一個數字。 */
@@ -119,9 +120,13 @@ function createCats(students, mapData, bundle) {
       mode: 'idle',
       timer: 0.5 + ((h >>> 4) % 30) / 10,  // 錯開每隻貓的第一次換動作時間
       rng: mulberry32(h),
-      // 表演用的計時器
+      // 加分時跳一下的計時器
       awardFx: 0,
-      levelFx: 0,
+      // 目前是不是全班最高分（可能好幾個人同分），由 updateCats() 每格更新
+      isTop: false,
+      // 今日之星與這節課淨加的分，由 main.js 的 refreshTodayStar() 維護
+      isStar: false,
+      sessionGain: 0,
       // 由 main.js 的 refreshDrowsy() 維護，見 poseOf()
       drowsy: false,
       floats: [],           // 飄字 { text, t }
@@ -140,7 +145,7 @@ function createCats(students, mapData, bundle) {
  * 唯一的例外是打瞌睡：當老師的登記次數超過加分次數時（cat.drowsy 由
  * main.js 的 refreshDrowsy() 依 model.js 的 isDrowsy() 設定），改用睡覺
  * 動畫池，並停止走動。這與分數高低無關 —— 分數再低也不會自己睡著，
- * 必須是老師實際登記過才會。滿級光環等等仍沿用原本等級的設定。 */
+ * 必須是老師實際登記過才會。地上的等級特效照樣留著（見 catfx.js）。 */
 function poseOf(cat) {
   const base = POSE_LADDER[levelFromXp(cat.student.xp)];
   if (!cat.drowsy) return base;
@@ -148,22 +153,31 @@ function poseOf(cat) {
     idle: DROWSY_IDLE,
     canWalk: false,
     walkChance: 0,
-    sparkle: false,
-    crown: base.crown,
+    flourish: false,
   };
 }
 
 /* 從該等級的閒置動畫池裡抽一個。 */
 function pickIdle(cat) {
   const animal = animalDefinition(cat);
-  if (animal) return animal.idle;
-  const pool = poseOf(cat).idle;
+  const pose = poseOf(cat);
+  if (animal) {
+    // 招牌動作穿插在一般待機之間，三次裡大約一次
+    if (pose.flourish && animal.flourish && cat.rng() < 1 / 3) return animal.flourish;
+    return animal.idle;
+  }
+  const pool = pose.idle;
   return pool[Math.floor(cat.rng() * pool.length)];
 }
 
 /* 這隻貓現在是坐著還是站著？決定加分時要播哪一種喵叫。 */
 function isSitting(cat) {
   return cat.anim && cat.anim.name.indexOf('_sit') !== -1;
+}
+
+/* 進度條切成幾格：一級要幾分就切幾格。分數太多格子會太細，最多切 10 格。 */
+function barSegments() {
+  return Math.max(1, Math.min(10, Math.round(CONFIG.XP_PER_LEVEL)));
 }
 
 /* 距離下一級的進度，0..1。滿級固定回 1。 */
@@ -176,12 +190,18 @@ function xpProgress(xp) {
  * 更新
  * ------------------------------------------------------------------- */
 function updateCats(cats, dt, mapData) {
+  CAT_FX.t += dt;
+
+  // 全班最高分。同分的一起算；大家都還是 0 分時沒有人是。
+  let top = 0;
+  for (const cat of cats) top = Math.max(top, cat.student.xp);
+
   for (const cat of cats) {
     updateAnim(cat.anim, dt);
+    cat.isTop = CONFIG.TOP_HALO !== false && top > 0 && cat.student.xp === top;
 
     // 表演計時器
     if (cat.awardFx > 0) cat.awardFx = Math.max(0, cat.awardFx - dt);
-    if (cat.levelFx > 0) cat.levelFx = Math.max(0, cat.levelFx - dt);
     for (let i = cat.floats.length - 1; i >= 0; i--) {
       cat.floats[i].t += dt;
       if (cat.floats[i].t > 1.2) cat.floats.splice(i, 1);
@@ -214,6 +234,8 @@ function updateCats(cats, dt, mapData) {
 
     cat.timer -= dt;
     if (cat.timer > 0) continue;
+    // 青蛙原地跳到一半時先等牠落地，不然會從半空瞬間回到地面
+    if (cat.anim.name === 'frog_hop' && cat.anim.frame !== 0) continue;
 
     const pose = poseOf(cat);
     if (pose.canWalk && cat.rng() < pose.walkChance) {
@@ -295,8 +317,9 @@ function playNote(cat) {
   cat.timer = 1.2;
 }
 
+/* 升級當下換成招牌動作。新解鎖的特效從這一刻起就一直留在身邊，
+ * 不另外播只出現一次的動畫。 */
 function playLevelUp(cat) {
-  cat.levelFx = 2.0;
   cat.mode = 'idle';
   const animal = animalDefinition(cat);
   setAnim(cat.anim, animal ? animal.celebrate : LEVELUP_ANIM);
@@ -310,6 +333,11 @@ function playLevelUp(cat) {
  * 依貓所在的列呼叫，好讓貓與樹、灌木正確地互相遮擋。
  * ------------------------------------------------------------------- */
 function drawCatsInRow(ctx, cats, bundle, row) {
+  // 家門口的小花園固定在錨點那一格，貓走開了也還在
+  for (const cat of cats) {
+    if (cat.anchorRow === row) drawCatGarden(ctx, cat, cat.anchorCol * TILE_SIZE, row * TILE_SIZE);
+  }
+
   for (const cat of cats) {
     if (Math.floor(cat.y / TILE_SIZE) !== row) continue;
 
@@ -324,7 +352,10 @@ function drawCatsInRow(ctx, cats, bundle, row) {
     const dx = Math.round(cat.x);
     const dyr = Math.round(dy);
 
+    // 光環、光圈跟著腳下走，不隨加分的跳躍上下
+    drawCatFxBack(ctx, cat, dx, Math.round(cat.y));
     drawCharacter(ctx, cat, bundle, dx, dyr);
+    drawCatFxFront(ctx, cat, dx, Math.round(cat.y));
   }
 }
 
@@ -354,10 +385,9 @@ function drawCatLabels(lctx, cats, scale, uiMin = 2) {
   for (const cat of cats) {
     const s = cat.student;
     const lv = levelFromXp(s.xp);
-    const pose = POSE_LADDER[lv];
     const cx = (cat.x + TILE_SIZE / 2) * scale;
     const top = cat.y * scale;                  // 貓所在格子的上緣
-    const mid = top + (TILE_SIZE / 2) * scale;  // 格子中心，光環以此為圓心
+    const mid = top + (TILE_SIZE / 2) * scale;  // 格子中心
 
     // 編輯模式下滑鼠移過來時的高亮。刻意做得很輕，只是提示「這隻可以點」。
     if (cat.hovered) {
@@ -380,27 +410,7 @@ function drawCatLabels(lctx, cats, scale, uiMin = 2) {
     const barY = barBottom - barH;
     const nameY = barY - 3 * ui;
 
-    // --- 滿級光環（畫在最底層）---
-    if (pose.crown) {
-      const r = 20 * ui;
-      const g = lctx.createRadialGradient(cx, mid, 0, cx, mid, r);
-      g.addColorStop(0, 'rgba(255, 214, 102, 0.32)');
-      g.addColorStop(1, 'rgba(255, 214, 102, 0)');
-      lctx.fillStyle = g;
-      lctx.beginPath();
-      lctx.arc(cx, mid, r, 0, Math.PI * 2);
-      lctx.fill();
-    }
-
-    // --- 升級光暈 ---
-    if (cat.levelFx > 0) {
-      const p = 1 - cat.levelFx / 2.0;
-      lctx.strokeStyle = `rgba(255, 236, 160, ${(1 - p) * 0.9})`;
-      lctx.lineWidth = 3 * ui * (1 - p) + 1;
-      lctx.beginPath();
-      lctx.arc(cx, mid, (10 + p * 26) * ui, 0, Math.PI * 2);
-      lctx.stroke();
-    }
+    // 全班最高分的金色光環畫在像素層、貓的身後（catfx.js），這裡只把名字變金色。
 
     // --- 座號與姓名 + 等級，排成一行並整體置中 ---
     // 有姓名時顯示「座號. 姓名」，沒有姓名時顯示座號（拿到真實名單之前的正常狀態）。
@@ -432,7 +442,7 @@ function drawCatLabels(lctx, cats, scale, uiMin = 2) {
       penX += helperW;
     }
     lctx.strokeText(nameText, penX, nameY);
-    lctx.fillStyle = pose.crown ? '#ffd666' : '#ffffff';
+    lctx.fillStyle = cat.isTop ? '#ffd666' : '#ffffff';
     lctx.fillText(nameText, penX, nameY);
     penX += nameW + gap;
 
@@ -448,13 +458,22 @@ function drawCatLabels(lctx, cats, scale, uiMin = 2) {
     lctx.fillStyle = 'rgba(24, 20, 28, 0.78)';
     lctx.fillRect(bx - ui, barY - ui, barW + ui * 2, barH + ui * 2);
 
-    lctx.fillStyle = 'rgba(255, 255, 255, 0.20)';
-    lctx.fillRect(bx, barY, barW, barH);
-
+    // 一分一格：每加一分就亮一格，比一條連續的長條更看得出來。
     // 條的顏色固定，不隨分數變化：避免在姿勢之外再加一條互相比較的視覺通道。
     // 也絕不使用紅色（見實作計畫第 8 節）。
-    lctx.fillStyle = lv >= CONFIG.MAX_LEVEL ? '#ffd666' : '#7bd88f';
-    lctx.fillRect(bx, barY, barW * Math.max(0, Math.min(1, cat.barShown)), barH);
+    const segs = barSegments();
+    const segGap = ui;
+    const segW = (barW - segGap * (segs - 1)) / segs;
+    const filled = Math.max(0, Math.min(1, cat.barShown)) * segs;
+    for (let i = 0; i < segs; i++) {
+      const sx = bx + i * (segW + segGap);
+      lctx.fillStyle = 'rgba(255, 255, 255, 0.20)';
+      lctx.fillRect(sx, barY, segW, barH);
+      const part = Math.max(0, Math.min(1, filled - i));
+      if (part <= 0) continue;
+      lctx.fillStyle = lv >= CONFIG.MAX_LEVEL ? '#ffd666' : '#7bd88f';
+      lctx.fillRect(sx, barY, segW * part, barH);
+    }
 
     // --- 加分飄字 ---
     lctx.textAlign = 'center';

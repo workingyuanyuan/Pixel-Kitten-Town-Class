@@ -5,7 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const root = path.resolve(__dirname, '..');
 const ctx = vm.createContext({ console });
-for (const name of ['config', 'anims', 'animals', 'assets', 'model', 'map', 'cats']) {
+for (const name of ['config', 'anims', 'animals', 'assets', 'model', 'map', 'cats', 'catfx']) {
   vm.runInContext(fs.readFileSync(path.join(root, 'js', name + '.js'), 'utf8'), ctx);
 }
 const run = code => vm.runInContext(code, ctx);
@@ -87,4 +87,64 @@ assert.equal(run('frog.x'), groundedX, 'no horizontal travel during landing');
 run("playLevelUp(frog)");
 assert.equal(run('frog.anim.frame'), 0);
 assert.equal(run('frog.timer'), 0.8);
-console.log('Animal movement, reactions, blocked paths, frame geometry and accessory isolation passed.');
+// Top-scorer halo: ties share it, nobody has it while everyone is at 0, and it follows score changes.
+run(`
+  const topCats = createCats([0, 0, 0].map((xp, i) => ({ id: 'top-' + i, seat: i + 1, name: '', xp })), testMap, {});
+  updateCats(topCats, 0.01, testMap);
+`);
+assert.equal(run('JSON.stringify(topCats.map(c => c.isTop))'), JSON.stringify([false, false, false]));
+run('topCats[0].student.xp = 4; topCats[2].student.xp = 4; updateCats(topCats, 0.01, testMap)');
+assert.equal(run('JSON.stringify(topCats.map(c => c.isTop))'), JSON.stringify([true, false, true]));
+run('topCats[1].student.xp = 5; updateCats(topCats, 0.01, testMap)');
+assert.equal(run('JSON.stringify(topCats.map(c => c.isTop))'), JSON.stringify([false, true, false]));
+run('CONFIG.TOP_HALO = false; updateCats(topCats, 0.01, testMap)');
+assert.equal(run('JSON.stringify(topCats.map(c => c.isTop))'), JSON.stringify([false, false, false]));
+run('CONFIG.TOP_HALO = true');
+// Every level from 1 up unlocks exactly one persistent effect, in level order.
+assert.equal(run('JSON.stringify(LEVEL_FX.map(f => f.level))'), JSON.stringify(Array.from({ length: run('CONFIG.MAX_LEVEL') }, (_, i) => i + 1)));
+assert.equal(run("hasLevelFx(0, 'sprout')"), false);
+assert.equal(run("hasLevelFx(1, 'sprout')"), true);
+assert.equal(run("hasLevelFx(4, 'sunflower')"), false);
+assert.equal(run("nextLevelFx(4).key"), 'sunflower');
+assert.equal(run('nextLevelFx(10)'), null);
+// Animals mix their flourish into idle from Lv3, never below.
+run(`
+  const penguin = testCats[2]; penguin.drowsy = false;
+  penguin.student.xp = 6;  // Lv2
+  var lowPicks = new Set(); for (let n = 0; n < 60; n++) lowPicks.add(pickIdle(penguin));
+  penguin.student.xp = 9;  // Lv3
+  var highPicks = new Set(); for (let n = 0; n < 60; n++) highPicks.add(pickIdle(penguin));
+  penguin.drowsy = true;
+  var sleepyPicks = new Set(); for (let n = 0; n < 60; n++) sleepyPicks.add(pickIdle(penguin));
+`);
+assert.deepEqual(Array.from(run('[...lowPicks]')), ['penguin_idle']);
+assert.deepEqual(Array.from(run('[...highPicks].sort()')), ['penguin_flap', 'penguin_idle']);
+assert.deepEqual(Array.from(run('[...sleepyPicks]')), ['penguin_idle']);
+// An idle frog flourish finishes its landing before the next idle pick.
+run(`
+  const idleFrog = testCats[5]; idleFrog.drowsy = false; idleFrog.mode = 'idle';
+  idleFrog.anim = makeAnimState('frog_hop'); idleFrog.anim.frame = 3; idleFrog.timer = 0;
+  updateCats([idleFrog], 0.001, testMap);
+`);
+assert.equal(run('idleFrog.anim.name'), 'frog_hop', 'idle hop must not snap to the ground mid-air');
+// Effect renderers run for every level and species without touching unknown canvas APIs.
+const fxCtx = { save(){}, restore(){}, fillRect(){}, beginPath(){}, ellipse(){}, arc(){}, fill(){}, moveTo(){}, lineTo(){},
+  createRadialGradient(){ return { addColorStop(){} }; }, globalAlpha: 1, fillStyle: '' };
+ctx.fxCtx = fxCtx;
+for (let xp = 0; xp <= 30; xp += 3) {
+  run(`for (const c of testCats) { c.student.xp = ${xp}; c.isTop = true; c.isStar = ${xp % 9 === 0}; c.drowsy = ${xp % 6 === 0};
+    drawCatGarden(fxCtx, c, 0, 0); drawCatFxBack(fxCtx, c, 0, 0); drawCatFxFront(fxCtx, c, 0, 0); }`);
+}
+// Nothing but the shadow belongs right under the feet: no effect pixel lands there.
+const feetHits = [];
+const probe = { ...fxCtx, fillRect(px, py) { if (px >= 9 && px <= 23 && py >= 27 && py <= 32) feetHits.push([px, py]); },
+  arc(cx, cy, r) { if (cy + r >= 27) feetHits.push(['arc', cx, cy, r]); } };
+ctx.probe = probe;
+for (let xp = 0; xp <= 30; xp += 3) {
+  for (let step = 0; step < 40; step++) {
+    run(`CAT_FX.t = ${step * 0.37}; for (const c of testCats) { c.student.xp = ${xp}; c.isTop = true; c.isStar = true;
+      drawCatGarden(probe, c, 0, 0); drawCatFxBack(probe, c, 0, 0); drawCatFxFront(probe, c, 0, 0); }`);
+  }
+}
+assert.deepEqual(feetHits, [], 'effects must leave the feet area to the shadow');
+console.log('Animal movement, reactions, blocked paths, frame geometry, accessory isolation, level effects and top halo passed.');

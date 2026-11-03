@@ -31,6 +31,13 @@
     <span id="conn-light" class="light" title="尚未連接資料夾"></span>
 
     <span id="status" class="muted"></span>
+
+    <!-- 全班共同目標。圓圈由 main.js 的 buildClassGoal() 依 CONFIG.CLASS_GOAL 產生 -->
+    <div id="class-goal" hidden>
+      <span class="tlabel">全班目標</span>
+      <div id="goal-track"><div id="goal-fill"></div></div>
+      <span id="goal-num" class="muted"></span>
+    </div>
     <span id="save-state" class="muted"></span>
   </header>
 
@@ -79,6 +86,8 @@
     <span id="panel-xp"></span>
     <span id="panel-next"></span>
   </div>
+  <div id="panel-unlock"></div>
+  <div id="panel-today"></div>
 
   <div id="panel-awards"></div>
   <button id="panel-note-btn" class="note-btn" type="button" hidden>登記</button>
@@ -164,6 +173,7 @@
 <script src="js/weather.js?v=20261103"></script>
 <script src="js/ambience.js?v=20261103"></script>
 <script src="js/cats.js?v=20261103"></script>
+<script src="js/catfx.js?v=20261103"></script>
 <script src="js/panel.js?v=20261103"></script>
 <script src="js/appearance.js?v=20261103"></script>
 <script src="js/mapedit.js?v=20261103"></script>

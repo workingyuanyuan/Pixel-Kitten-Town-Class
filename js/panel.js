@@ -234,12 +234,25 @@ function refreshPanel() {
   const fill = document.getElementById('panel-bar-fill');
   fill.style.width = pct + '%';
   fill.classList.toggle('maxed', maxed);
+  document.getElementById('panel-bar').style.setProperty('--segs', barSegments());
 
   document.getElementById('panel-xp').textContent =
     CONFIG.SHOW_XP_NUMBERS ? `${s.xp} / ${CONFIG.XP_MAX}` : '';
   document.getElementById('panel-next').textContent = maxed
     ? '已達最高等級'
     : `再 ${CONFIG.XP_PER_LEVEL - inLevel} 分升到 Lv.${lv + 1}`;
+
+  // 讓學生知道下一級會多出什麼，比單純的數字更有盼頭
+  const next = nextLevelFx(lv);
+  document.getElementById('panel-unlock').textContent = next
+    ? `Lv.${next.level} 解鎖：${next.label}`
+    : '所有特效都解鎖了！';
+
+  // 這節課（打開網頁之後）加了幾分。今日之星的計算見 main.js 的 refreshTodayStar()
+  const gain = P.cat.sessionGain || 0;
+  document.getElementById('panel-today').textContent = gain > 0
+    ? `這節課 +${gain} 分` + (P.cat.isStar ? '　★ 今日之星' : '')
+    : '';
 
   // 加分按鈕：滿分、或還沒連接資料夾（唯讀）都要變灰。
   // 唯讀時讓人按下去卻寫不進檔案，比按鈕變灰更糟。
@@ -386,25 +399,26 @@ function updatePanel(dt) {
   ctx.clearRect(0, 0, size, size);
   ctx.imageSmoothingEnabled = false;
 
+  // 已解鎖的特效與最高分光環，跟地圖上畫的一模一樣，只是放大。
+  // 光圈與光芒會超出那一格，所以看的範圍放大到 42 格見方：
+  // 左右各多 5，上面多 1（愛心飄到的高度），下面多 9（光芒的尖端）。
   const cat = P.cat;
-  drawCharacter(ctx, cat, S.bundle, 0, 0, size);
-
-  // 滿級的光暈，跟地圖上一致
-  if (POSE_LADDER[levelFromXp(cat.student.xp)].crown) {
-    const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-    g.addColorStop(0, 'rgba(255, 214, 102, 0.22)');
-    g.addColorStop(1, 'rgba(255, 214, 102, 0)');
-    ctx.globalCompositeOperation = 'destination-over';
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, size, size);
-    ctx.globalCompositeOperation = 'source-over';
-  }
+  ctx.save();
+  ctx.scale(size / 42, size / 42);
+  ctx.translate(5, 1);
+  drawCatGarden(ctx, cat, 0, 0);
+  drawCatFxBack(ctx, cat, 0, 0);
+  drawCharacter(ctx, cat, S.bundle, 0, 0);
+  drawCatFxFront(ctx, cat, 0, 0);
+  ctx.restore();
 }
 
 /* 升級時面板上短暫顯示的字樣 */
 function flashLevelUp(lv) {
   const el = document.getElementById('panel-levelup');
-  el.textContent = `升級！ Lv.${lv}　${CONFIG.LEVEL_TITLES[lv] || ''}`;
+  const fx = levelFxAt(lv);
+  el.textContent = `升級！ Lv.${lv}　${CONFIG.LEVEL_TITLES[lv] || ''}` + (fx ? `
+解鎖：${fx.label}` : '');
   el.classList.remove('show');
   void el.offsetWidth;   // 強制重排，讓動畫可以重播
   el.classList.add('show');

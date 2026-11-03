@@ -160,8 +160,10 @@
 
 /* ---------------- 進度條 ---------------- */
 #panel-bar {
+  position: relative;
   margin-top: 14px;
   height: 18px;
+  flex-shrink: 0;   /* 視窗矮時面板改用捲動，不要把進度條壓扁 */
   background: #b99b78;
   border: 3px solid var(--line);
   border-radius: 10px;
@@ -175,6 +177,18 @@
   background: linear-gradient(#8ee09f, #5fbf72);
   box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.45);
   transition: width 600ms ease-out;
+}
+
+/* 一分一格的分隔線，格數由 panel.js 設定的 --segs 決定。
+   每格開頭畫一條，往左挪半條寬，第一條就藏在邊框裡。 */
+#panel-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(to right, var(--line) 0 3px, transparent 3px) repeat-x;
+  background-size: calc(100% / var(--segs, 3)) 100%;
+  background-position: -1.5px 0;
 }
 
 /* 滿級用金色。絕不使用紅色 —— 見實作計畫第 8 節。 */
@@ -409,6 +423,22 @@
 }
 
 /* ---------------- 升級字樣 ---------------- */
+#panel-unlock {
+  margin-top: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #4f8a3a;
+}
+
+#panel-today {
+  margin-top: 4px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #b8781c;
+}
+
+#panel-today:empty { display: none; }
+
 #panel-levelup {
   margin-top: 14px;
   text-align: center;
@@ -417,6 +447,7 @@
   color: #b8781c;
   text-shadow: 0 1px 0 var(--cream);
   opacity: 0;
+  white-space: pre-line;
 }
 
 #panel-levelup.show { animation: levelup-in 2000ms ease-out; }
