@@ -43,6 +43,8 @@ const OBJECT_KINDS = {
   face:     { label: '擋土牆',   sheet: 'struct', shadow: false, blocks: 'all'   },
   stairs:   { label: '階梯',     sheet: 'struct', shadow: false, blocks: 'none'  },
   wall:     { label: '院牆',     sheet: 'wall',   shadow: false, blocks: 'all', tiled: true },
+  // 橋貼著地面畫在貓底下（flat），蓋住的水格變成可以走
+  bridge:   { label: '橋',       sheet: 'bridge', shadow: false, blocks: 'none', flat: true },
 };
 
 /* 種類 -> 可選項目清單。在檔案最後面填入（因為要等常數都宣告完）。 */
@@ -232,6 +234,14 @@ const WALL_STAMPS = [
   { label: '右下角(面)', src: WALL.BRF },
 ];
 
+/* ---------------------------------------------------------------------
+ * 橋 —— 圖集是 water.js 用程式畫出來的（sheet 'bridge'），不是 PNG
+ * ------------------------------------------------------------------- */
+const BRIDGES = [
+  { sx: 0,  sy: 0, sw: 64,  sh: 128, w: 2, h: 4 },   // 南北向
+  { sx: 64, sy: 0, sw: 128, sh: 64,  w: 4, h: 2 },   // 東西向
+];
+
 /* 種類 -> 項目清單。編輯器的調色盤與存檔的索引都以這裡為準，
  * 所以清單的順序一旦有人用它存過檔就不要再改動，否則舊地圖會錯位。 */
 OBJECT_LISTS.tree   = PLANT.TREES;
@@ -244,6 +254,7 @@ OBJECT_LISTS.pebble = PROPS.PEBBLES;
 OBJECT_LISTS.face   = STRUCT.WALL_FACE;
 OBJECT_LISTS.stairs = STRUCT.STAIRS;
 OBJECT_LISTS.wall   = WALL_STAMPS;
+OBJECT_LISTS.bridge = BRIDGES;
 
 /* ---------------------------------------------------------------------
  * 地面筆刷
@@ -256,4 +267,6 @@ const GROUND_BRUSHES = [
   { id: 'medium',  label: '石板(中)',   sheet: 'grass', pool: GRASS.BLEND_MEDIUM },
   { id: 'sparse',  label: '石板(疏)',   sheet: 'grass', pool: GRASS.BLEND_SPARSE },
   { id: 'stone',   label: '石地板',     sheet: 'stone', pool: STONE_FLOOR.SOLID },
+  // 水不能走；岸邊、水紋都由 water.js 依周圍的格子自動畫，塗成一片就好
+  { id: 'water',   label: '水',         sheet: 'water', pool: [[0, 0]] },
 ];

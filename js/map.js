@@ -12,7 +12,7 @@
  * 【預設地圖刻意做得很單純】
  * 程式沒有辦法判斷「階梯該落在哪裡才合理」「擋土牆下面該不該是空地」
  * 這類空間語意，硬要自動擺就會產生一堆看起來沒有邏輯的東西。
- * 所以預設只鋪草地、一條路、零星植栽 —— 真正的場景交給地圖編輯器
+ * 所以預設只鋪草地、一條路、一條小溪與橋、零星植栽 —— 真正的場景交給地圖編輯器
  * （按工具列的 ✎）由人來擺。
  * ===================================================================== */
 
@@ -65,7 +65,7 @@ function rebuildMap(map) {
     }
     overlays.push({
       sheet: kind.sheet, px: [item.sx, item.sy, item.sw, item.sh],
-      w: item.w, h: item.h, col: o.c, row: o.r, ref: o,
+      w: item.w, h: item.h, col: o.c, row: o.r, ref: o, flat: !!kind.flat,
     });
 
     if (kind.blocks === 'all') {
@@ -79,6 +79,25 @@ function rebuildMap(map) {
       if (blocked[tr] && tc >= 0 && tc < cols) blocked[tr][tc] = true;
     }
   }
+
+  /* 水不能走，除非上面架了橋。橋只讓水格變得能走，不會解除樹或道具的阻擋。 */
+  const bridged = new Set();
+  for (const o of overlays) {
+    if (!o.flat) continue;
+    for (let r = Math.max(0, o.row); r < Math.min(rows, o.row + o.h); r++) {
+      for (let c = Math.max(0, o.col); c < Math.min(cols, o.col + o.w); c++) bridged.add(r * cols + c);
+    }
+  }
+  // 順便記下水面的形狀：水的畫面只跟它有關，搬樹、塗草地都不必重畫
+  const wet = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (map.ground[r][c].sheet !== 'water') continue;
+      wet.push(r * cols + c);
+      if (!bridged.has(r * cols + c)) blocked[r][c] = true;
+    }
+  }
+  map.waterKey = `${cols}x${rows}:${wet.join(',')}`;
 
   /* 由上而下排序，貓與物件才能正確互相遮擋；同錨點時影子優先。 */
   overlays.sort((a, b) => {
@@ -155,6 +174,30 @@ function generateMap(seed, cols, rows) {
     }
   }
 
+  /* 一條橫越下方的小溪，寬 2，緩緩彎曲，從畫面左緣流到右緣。
+   * 支線穿過溪的地方架一座南北向的橋，那幾欄的溪道拉直，橋才放得進去。 */
+  const water = [];
+  for (let r = 0; r < rows; r++) water.push(new Array(cols).fill(false));
+  const riverRow = Math.floor(rows * 0.8);
+  const phase = rand() * 6.28;
+  // 橋佔 bridgeTop-1 到 bridgeTop+2，所以溪頂最低只能到 rows-4，才不會壓到最外圈
+  const riverTop = (c) => Math.max(2, Math.min(rows - 4,
+    riverRow + Math.round(Math.sin(c * 0.22 + phase) * 1.2)));
+  const bridgeTop = riverTop(branchCol);
+  const hasRiver = rows >= 10 && cols >= 8;   // 太小的地圖放不下溪和橋，就不放
+  if (hasRiver) {
+    const tops = [];
+    for (let c = -1; c <= cols; c++) tops.push((c >= branchCol - 1 && c <= branchCol + 2) ? bridgeTop : riverTop(c));
+    for (let c = 0; c < cols; c++) {
+      // 轉彎處把相鄰兩欄的溪道連起來（寬 3），才會是斜坡而不是一格一格的缺口
+      const near = [tops[c], tops[c + 1], tops[c + 2]];
+      for (let r = Math.min(...near); r < Math.max(...near) + 2; r++) {
+        ground[r][c] = { sheet: 'water', src: [0, 0] };
+        water[r][c] = true;
+      }
+    }
+  }
+
   const objects = [];
   const used = [];
   for (let r = 0; r < rows; r++) used.push(new Array(cols).fill(false));
@@ -163,13 +206,16 @@ function generateMap(seed, cols, rows) {
     for (let rr = r; rr < r + h; rr++) {
       for (let cc = c; cc < c + w; cc++) {
         if (cc < 1 || rr < 1 || cc >= cols - 1 || rr >= rows - 1) return false;
-        if (used[rr][cc] || road[rr][cc]) return false;
+        if (used[rr][cc] || road[rr][cc] || water[rr][cc]) return false;
       }
     }
     return true;
   }
+
   function take(c, r, w, h) {
-    for (let rr = r; rr < r + h; rr++) for (let cc = c; cc < c + w; cc++) used[rr][cc] = true;
+    for (let rr = Math.max(0, r); rr < Math.min(rows, r + h); rr++) {
+      for (let cc = Math.max(0, c); cc < Math.min(cols, c + w); cc++) used[rr][cc] = true;
+    }
   }
   function place(t, i, c, r) {
     const it = OBJECT_LISTS[t][i];
@@ -177,6 +223,13 @@ function generateMap(seed, cols, rows) {
     objects.push({ t, i, c, r });
     take(c, r, it.w, it.h);
     return true;
+  }
+
+  // 橋一定要放：它跨在水上，不能用 free() 檢查
+  // 兩頭橋墩外再多留一格，木箱、樹才不會堵在橋口
+  if (hasRiver) {
+    objects.push({ t: 'bridge', i: 0, c: branchCol, r: bridgeTop - 1 });
+    take(branchCol, bridgeTop - 2, 2, 6);
   }
 
   // 樹：彼此隔開，不擋路
@@ -209,7 +262,7 @@ function generateMap(seed, cols, rows) {
   // 細節
   for (let r = 1; r < rows - 1; r++) {
     for (let c = 1; c < cols - 1; c++) {
-      if (used[r][c]) continue;
+      if (used[r][c] || water[r][c]) continue;
       if (road[r][c]) {
         if (rand() < 0.04) objects.push({ t: 'pebble', i: ri(0, OBJECT_LISTS.pebble.length - 1), c, r });
       } else if (rand() < 0.07) {
@@ -285,6 +338,32 @@ function drawGround(ctx, mapData, images) {
   }
 }
 
+/* 貼地的物件（橋）畫在地面與水之後、植物與貓之前，貓才能走在上面。
+ * 右下方墊一條半透明的影子，看起來架在水面上。 */
+function drawFlats(ctx, mapData, images) {
+  ctx.imageSmoothingEnabled = false;
+  const T = TILE_SIZE;
+  for (const o of mapData.overlays) {
+    if (!o.flat) continue;
+    const img = sheetImage(images, o.sheet);
+    if (!img) continue;
+    const [sx, sy, sw, sh] = o.px;
+    const dx = o.col * T + Math.round((o.w * T - sw) / 2);
+    const dy = (o.row + o.h) * T - sh;
+    ctx.fillStyle = 'rgba(25, 45, 55, 0.35)';
+    if (sh > sw) ctx.fillRect(dx + sw - 6, dy + 4, 5, sh - 8);
+    else ctx.fillRect(dx + 4, dy + sh - 8, sw - 8, 5);
+    ctx.drawImage(img, sx, sy, sw, sh, dx, dy, sw, sh);
+  }
+}
+
+/* 樹在風裡輕輕擺：每棵樹相位不同，大部分時間停在原位，偶爾偏 1 像素。 */
+function treeSway(o) {
+  if (!CONFIG.AMBIENCE || !CONFIG.SCENE_LIFE || !o.ref || o.ref.t !== 'tree') return 0;
+  const t = performance.now() / 1000;
+  return Math.round(Math.sin(t * 0.9 + o.col * 1.7 + o.row * 0.6) * 0.8);
+}
+
 function drawOverlay(ctx, mapData, images, row) {
   ctx.imageSmoothingEnabled = false;
   const T = TILE_SIZE;
@@ -295,6 +374,7 @@ function drawOverlay(ctx, mapData, images, row) {
     const anchor = o.row + o.h - 1;
     if (anchor < row) continue;
     if (anchor > row) break;
+    if (o.flat) continue;   // 貼地物件在 drawFlats 畫過了
 
     const img = sheetImage(images, o.sheet);
     if (!img) continue;
@@ -308,7 +388,15 @@ function drawOverlay(ctx, mapData, images, row) {
       const [sx, sy, sw, sh] = o.px;
       const dx = o.col * T + Math.round((o.w * T - sw) / 2);
       const dy = (o.row + o.h) * T - sh;
-      ctx.drawImage(img, sx, sy, sw, sh, dx, dy, sw, sh);
+      const sway = treeSway(o);
+      if (sway) {
+        // 樹冠上半截左右挪 1 像素，樹幹不動。整數位移，像素才不會糊。
+        const top = Math.round(sh * 0.55);
+        ctx.drawImage(img, sx, sy, sw, top, dx + sway, dy, sw, top);
+        ctx.drawImage(img, sx, sy + top, sw, sh - top, dx, dy + top, sw, sh - top);
+      } else {
+        ctx.drawImage(img, sx, sy, sw, sh, dx, dy, sw, sh);
+      }
     } else {
       ctx.drawImage(img, o.src[0] * T, o.src[1] * T, o.w * T, o.h * T,
         o.col * T, o.row * T, o.w * T, o.h * T);

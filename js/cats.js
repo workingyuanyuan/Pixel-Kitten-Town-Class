@@ -231,6 +231,18 @@ function enterIdle(cat) {
   cat.timer = 2 + cat.rng() * 4;
 }
 
+/* 從目前位置直線走到目標，途中經過的格子都要能站。
+ * 只檢查終點的話，貓會從水（或樹幹）上直接穿過去。 */
+function pathClear(mapData, x0, y0, x1, y1) {
+  const half = TILE_SIZE / 2;
+  for (let k = 1; k < 8; k++) {
+    const c = Math.floor((x0 + (x1 - x0) * k / 8 + half) / TILE_SIZE);
+    const r = Math.floor((y0 + (y1 - y0) * k / 8 + half) / TILE_SIZE);
+    if (mapData.blocked[r] && mapData.blocked[r][c]) return false;
+  }
+  return true;
+}
+
 function startWalk(cat, mapData) {
   const R = CONFIG.WANDER_RADIUS;
   const animal = animalDefinition(cat);
@@ -244,6 +256,7 @@ function startWalk(cat, mapData) {
     const r = animal ? Math.floor(cat.y / TILE_SIZE) : cat.anchorRow + dr;
     if (c < 1 || r < 1 || c >= mapData.cols - 1 || r >= mapData.rows - 1) continue;
     if (mapData.blocked[r][c]) continue;
+    if (!pathClear(mapData, cat.x, cat.y, c * TILE_SIZE, r * TILE_SIZE)) continue;
     if (c * TILE_SIZE === cat.x && (animal || r * TILE_SIZE === cat.y)) continue;
 
     cat.targetX = c * TILE_SIZE;

@@ -174,8 +174,11 @@ function cellFromEvent(e) {
 function paintGround(c, r) {
   const b = GROUND_BRUSHES[ED.brush];
   if (!b || c < 0 || r < 0 || c >= S.map.cols || r >= S.map.rows) return;
+  // 已經是水就不要再塗一次：拖曳時每一下都會觸發，重算岸邊不便宜
+  if (b.sheet === 'water' && S.map.ground[r][c].sheet === 'water') return;
   const src = b.pool[Math.floor(Math.random() * b.pool.length)];
   S.map.ground[r][c] = { sheet: b.sheet, src: [src[0], src[1]] };
+  rebuildMap(S.map);   // 水會改變通行判定，岸邊也要重畫
   ED.onChange && ED.onChange();
 }
 

@@ -598,11 +598,19 @@ function frame(t) {
     sctx.fillRect(0, 0, S.stage.width, S.stage.height);
   }
 
+  drawWater(sctx, S.map, dt);
+  drawFlats(sctx, S.map, S.bundle.tiles);
+
+  // 光影只落在地面上，要在植物與貓之前畫
+  ambienceGround(sctx, S.map, S.bundle.tiles, dt);
+
   // 逐列交錯繪製植物與貓，讓前後遮擋正確
   for (let row = 0; row < S.map.rows; row++) {
     if (S.bundle.tiles.plant) drawOverlay(sctx, S.map, S.bundle.tiles, row);
     drawCatsInRow(sctx, S.cats, S.bundle, row);
   }
+
+  ambienceAir(sctx);
 
   const lctx = S.lctx;
   lctx.clearRect(0, 0, S.labels.width, S.labels.height);

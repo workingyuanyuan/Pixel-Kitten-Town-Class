@@ -48,6 +48,9 @@ async function loadAllAssets() {
     }
   });
 
+  // 水與橋沒有 PNG，是 water.js 用程式畫的
+  Object.assign(tiles, makeProceduralSheets());
+
   // 2. 載入貓的基底毛色（完整的貓）
   const bases = await Promise.all(CAT_BASES.map(path => loadImage(path)));
   bases.forEach((img, index) => {
