@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>班級像素小鎮</title>
-<link rel="stylesheet" href="css/main.css">
-<link rel="stylesheet" href="css/panel.css">
-<link rel="stylesheet" href="css/appearance.css">
+<link rel="stylesheet" href="css/main.css?v=20261103">
+<link rel="stylesheet" href="css/panel.css?v=20261103">
+<link rel="stylesheet" href="css/appearance.css?v=20261103">
 </head>
 <body>
 
@@ -29,6 +29,7 @@
 
     <button id="btn-reload" class="tbtn tbtn-icon" disabled title="重新載入檔案">↻</button>
     <button id="btn-mapedit" class="tbtn tbtn-icon" title="地圖編輯">✎</button>
+    <button id="btn-weather" class="tbtn tbtn-icon" title="天氣">🌤️</button>
 
     <span id="conn-light" class="light" title="尚未連接資料夾"></span>
 
@@ -148,20 +149,24 @@
 
 <div id="banner" hidden></div>
 
-<script src="js/config.js"></script>
-<script src="js/anims.js"></script>
-<script src="js/animals.js"></script>
-<script src="js/tileset.js"></script>
-<script src="js/assets.js"></script>
-<script src="js/storage.js"></script>
-<script src="js/model.js"></script>
-<script src="js/map.js"></script>
-<script src="js/water.js"></script>
-<script src="js/ambience.js"></script>
-<script src="js/cats.js"></script>
-<script src="js/panel.js"></script>
-<script src="js/appearance.js"></script>
-<script src="js/mapedit.js"></script>
-<script src="js/main.js"></script>
+<!-- ?v= 是為了讓瀏覽器丟掉快取裡的舊檔。tools/serve.py 已經會叫瀏覽器每次確認，
+     這個號碼只是給「換伺服器之前就快取的舊檔」用的，之後不必再改。 -->
+<script src="js/config.js?v=20261103"></script>
+<script src="js/anims.js?v=20261103"></script>
+<script src="js/animals.js?v=20261103"></script>
+<script src="js/tileset.js?v=20261103"></script>
+<script src="js/assets.js?v=20261103"></script>
+<script src="js/storage.js?v=20261103"></script>
+<script src="js/model.js?v=20261103"></script>
+<script src="js/map.js?v=20261103"></script>
+<script src="js/water.js?v=20261103"></script>
+<script src="js/ground.js?v=20261103"></script>
+<script src="js/weather.js?v=20261103"></script>
+<script src="js/ambience.js?v=20261103"></script>
+<script src="js/cats.js?v=20261103"></script>
+<script src="js/panel.js?v=20261103"></script>
+<script src="js/appearance.js?v=20261103"></script>
+<script src="js/mapedit.js?v=20261103"></script>
+<script src="js/main.js?v=20261103"></script>
 </body>
 </html>

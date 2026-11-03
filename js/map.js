@@ -321,22 +321,7 @@ function deserializeMap(data) {
  * ------------------------------------------------------------------- */
 function sheetImage(images, name) { return images[name] || null; }
 
-function drawGround(ctx, mapData, images) {
-  ctx.imageSmoothingEnabled = false;
-  const T = TILE_SIZE;
-  for (let r = 0; r < mapData.rows; r++) {
-    for (let c = 0; c < mapData.cols; c++) {
-      const g = mapData.ground[r][c];
-      const img = sheetImage(images, g.sheet);
-      if (!img) {
-        ctx.fillStyle = '#5d7a3a';
-        ctx.fillRect(c * T, r * T, T, T);
-        continue;
-      }
-      ctx.drawImage(img, g.src[0] * T, g.src[1] * T, T, T, c * T, r * T, T, T);
-    }
-  }
-}
+/* 地面（草地、小路）在 ground.js 用程式畫，這裡只畫地面以上的東西 */
 
 /* 貼地的物件（橋）畫在地面與水之後、植物與貓之前，貓才能走在上面。
  * 右下方墊一條半透明的影子，看起來架在水面上。 */
@@ -357,11 +342,13 @@ function drawFlats(ctx, mapData, images) {
   }
 }
 
-/* 樹在風裡輕輕擺：每棵樹相位不同，大部分時間停在原位，偶爾偏 1 像素。 */
+/* 樹在風裡輕輕擺：每棵樹相位不同，大部分時間停在原位，偶爾偏 1 像素。
+ * 一陣風吹過（weather.js 的 windAt）時往右偏，風越大偏得越久。 */
 function treeSway(o) {
   if (!CONFIG.AMBIENCE || !CONFIG.SCENE_LIFE || !o.ref || o.ref.t !== 'tree') return 0;
   const t = performance.now() / 1000;
-  return Math.round(Math.sin(t * 0.9 + o.col * 1.7 + o.row * 0.6) * 0.8);
+  const gust = windAt(o.col * TILE_SIZE);
+  return Math.round(Math.sin(t * 0.9 + o.col * 1.7 + o.row * 0.6) * 0.6 + gust * 0.6);
 }
 
 function drawOverlay(ctx, mapData, images, row) {

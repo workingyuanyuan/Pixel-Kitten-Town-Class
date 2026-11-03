@@ -20,7 +20,7 @@
  * ===================================================================== */
 
 const WATER_COLORS = {
-  lip: '#72751b',       // 岸上的草，跟草地圖塊同色
+  lip: '#72751b',       // 岸上的草。實際上不畫，讓 ground.js 的草地透出來
   bank: '#45431f',      // 濕泥岸
   shallow: '#5f8f7f',
   mid: '#4d7d78',
@@ -71,7 +71,7 @@ function pixelHash(x, y) {
 /* ---------------------------------------------------------------------
  * 程式產生的圖集：水的地面圖塊、兩座橋（座標表 BRIDGES 在 tileset.js）
  *
- * 註冊成跟 PNG 一樣的 tiles，編輯器縮圖、drawGround、drawFlats 都能直接用。
+ * 註冊成跟 PNG 一樣的 tiles，編輯器縮圖、drawFlats 都能直接用。
  * ------------------------------------------------------------------- */
 function makeProceduralSheets() {
   return { water: makeWaterTile(), bridge: makeBridgeSheet() };
@@ -177,20 +177,25 @@ function shoreDistance(map, c, r, x, y) {
   return d - valueNoise(x, y, 10) * 5 - valueNoise(x + 97, y, 4) * 1.5;
 }
 
+/* 岸邊的格子當成圓角方塊，凸進水裡的岸角就是圓的；
+ * 兩塊岸之間再用「平滑取最小值」接起來，水的直角轉彎也會變成圓弧。 */
+const SHORE_CORNER = 12, SHORE_FILLET = 14;
+
 function rawShoreDistance(map, c, r, x, y) {
-  const T = TILE_SIZE;
+  const T = TILE_SIZE, R = SHORE_CORNER, k = SHORE_FILLET;
   let best = 99;
   for (let dr = -1; dr <= 1; dr++) {
     for (let dc = -1; dc <= 1; dc++) {
       if (!dc && !dr) continue;
       if (isWater(map, c + dc, r + dr) !== false) continue;
-      const x0 = (c + dc) * T, y0 = (r + dr) * T;
-      const dx = Math.max(x0 - x, 0, x - (x0 + T));
-      const dy = Math.max(y0 - y, 0, y - (y0 + T));
-      best = Math.min(best, Math.hypot(dx, dy));
+      const qx = Math.abs(x - (c + dc + 0.5) * T) - (T / 2 - R);
+      const qy = Math.abs(y - (r + dr + 0.5) * T) - (T / 2 - R);
+      const d = Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - R;
+      const h = Math.max(k - Math.abs(best - d), 0) / k;
+      best = Math.min(best, d) - h * h * k / 4;
     }
   }
-  return best;
+  return Math.max(0, best);
 }
 
 function buildWater(map, W, H) {
@@ -231,9 +236,12 @@ function buildWater(map, W, H) {
         while (d >= bands[b][0]) b++;
         // 交界處一格棋盤抖色，像素畫的漸層
         if (b > 0 && bands[b - 1][2] && d < bands[b - 1][0] + 1 && ((x + y) & 1)) b--;
-        const [cr, cg, cb] = bands[b][1];
         const i = ((y - y0) * bw + (x - x0)) * 4;
-        img.data[i] = cr; img.data[i + 1] = cg; img.data[i + 2] = cb; img.data[i + 3] = 255;
+        // 最外層是岸上的草：留空，讓底下 ground.js 畫的草地透出來，岸線才接得上
+        if (b > 0) {
+          const [cr, cg, cb] = bands[b][1];
+          img.data[i] = cr; img.data[i + 1] = cg; img.data[i + 2] = cb; img.data[i + 3] = 255;
+        }
         if (d >= 6) mask[y * W + x] = 1;
         if (d >= 4 && d < 5.5) foamPx.push([x - x0, y - y0]);
       }

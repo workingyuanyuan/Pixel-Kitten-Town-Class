@@ -4,7 +4,7 @@
     {
       "name": "pixel-town",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "8173", "--bind", "127.0.0.1"],
+      "runtimeArgs": ["tools/serve.py", "8173"],
       "port": 8173
     }
   ]

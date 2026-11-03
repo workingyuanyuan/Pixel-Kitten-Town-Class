@@ -591,17 +591,15 @@ function frame(t) {
   const sctx = S.sctx;
   sctx.clearRect(0, 0, S.stage.width, S.stage.height);
 
-  if (S.bundle.tiles.grass) {
-    drawGround(sctx, S.map, S.bundle.tiles);
-  } else {
-    sctx.fillStyle = '#5d7a3a';
-    sctx.fillRect(0, 0, S.stage.width, S.stage.height);
-  }
+  // 草地與小路是程式畫的（ground.js），不靠素材圖
+  drawProceduralGround(sctx, S.map, S.bundle.tiles);
+  drawGroundLife(sctx);
 
   drawWater(sctx, S.map, dt);
   drawFlats(sctx, S.map, S.bundle.tiles);
 
-  // 光影只落在地面上，要在植物與貓之前畫
+  // 天氣與光影只落在地面上，要在植物與貓之前畫
+  weatherGround(sctx, S.map, dt);
   ambienceGround(sctx, S.map, S.bundle.tiles, dt);
 
   // 逐列交錯繪製植物與貓，讓前後遮擋正確
@@ -611,6 +609,7 @@ function frame(t) {
   }
 
   ambienceAir(sctx);
+  weatherAir(sctx);
 
   const lctx = S.lctx;
   lctx.clearRect(0, 0, S.labels.width, S.labels.height);
@@ -641,6 +640,7 @@ async function boot() {
     onAppearance: saveAppearance,
   });
   wireControls();
+  initWeather();
 
   S.bundle = await loadAllAssets();
   S.map = generateMap(CONFIG.MAP_SEED, CONFIG.MAP_COLS, CONFIG.MAP_ROWS);

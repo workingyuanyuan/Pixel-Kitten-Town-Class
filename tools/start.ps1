@@ -86,7 +86,9 @@ $url = "http://localhost:$port/"
 # --- 啟動伺服器 ----------------------------------------------------------
 # 先啟動、確認真的在聽，才開瀏覽器。順序反過來的話，瀏覽器會比伺服器早一步
 # 開啟，使用者看到的就是「無法連上這個網站」。
-$serverArgs = $pyArgsPrefix + @('-m', 'http.server', "$port", '--bind', '127.0.0.1')
+# tools/serve.py 就是內建的 http.server，只是會叫瀏覽器每次都確認檔案有沒有更新，
+# 程式更新後按重新整理才不會拿到快取裡的舊檔
+$serverArgs = $pyArgsPrefix + @((Join-Path $root 'tools\serve.py'), "$port")
 $server = Start-Process -FilePath $pyCmd -ArgumentList $serverArgs -PassThru -NoNewWindow
 
 $ready = $false
