@@ -143,18 +143,24 @@ function generateMap(seed, cols, rows) {
   for (let r = 0; r < rows; r++) road.push(new Array(cols).fill(false));
 
   function pave(c, r) {
-    if (c < 1 || r < 1 || c >= cols - 1 || r >= rows - 1) return;
+    if (c < 0 || r < 0 || c >= cols || r >= rows) return;
+    // 最外圈也鋪成路，路才會接到畫面外的郊外（composeView）。最外圈本來就不能走。
+    // 這裡不抽亂數、也不記進 road，後面產生的東西才跟以前一模一樣。
+    if (c === 0 || r === 0 || c === cols - 1 || r === rows - 1) {
+      ground[r][c] = { sheet: 'grass', src: GRASS.BLEND_DENSE[0] };
+      return;
+    }
     ground[r][c] = { sheet: 'grass', src: pick(GRASS.BLEND_DENSE) };
     road[r][c] = true;
   }
 
   // 一條橫貫的主幹道，寬 2
   const mainRow = Math.floor(rows * 0.55);
-  for (let c = 1; c < cols - 1; c++) { pave(c, mainRow); pave(c, mainRow + 1); }
+  for (let c = 0; c < cols; c++) { pave(c, mainRow); pave(c, mainRow + 1); }
 
   // 一條垂直支線
   const branchCol = ri(Math.floor(cols * 0.25), Math.floor(cols * 0.75));
-  for (let r = 1; r < rows - 1; r++) pave(branchCol, r);
+  for (let r = 0; r < rows; r++) pave(branchCol, r);
 
   // 路緣羽化
   const nRoad = (c, r) => {
@@ -272,6 +278,117 @@ function generateMap(seed, cols, rows) {
   }
 
   return rebuildMap({ cols, rows, ground, objects });
+}
+
+/* ---------------------------------------------------------------------
+ * 畫面用的地圖：地圖外圍再補一圈郊外，讓小鎮鋪滿整個視窗
+ *
+ * 視窗比地圖大的時候，多出來的地方不再留白，而是延伸出去的草地與樹林；
+ * 碰到地圖邊緣的路和溪會一路接到畫面外。這圈郊外只用來畫，貓走不到、
+ * 編輯器改不到、也不會存進地圖檔 —— 存檔與貓的座標永遠只看真正的地圖。
+ *
+ * padC、padR 是左右、上下各補幾格。回傳的地圖跟一般地圖同一個格式，
+ * 地面、水、光影、天氣直接拿它畫；真正的地圖在其中的 (padC, padR)。
+ * ------------------------------------------------------------------- */
+const APRON_BLOCK = 5;   // 郊外的樹以 5x5 格為一區，每區最多一棵，疏密才均勻
+
+function cellHash(c, r, salt) {
+  return pixelHash(c * 7 + salt * 1013, r * 13 + salt * 7919) / 4294967296;
+}
+
+function composeView(map, padC, padR) {
+  const { cols, rows } = map;
+  const vc = cols + padC * 2, vr = rows + padR * 2;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const extends_ = (g) => g.sheet === 'water' ||
+    ['p', 'm'].includes(groundMaterialOf(g));
+
+  /* 地圖外的格子沿用最近的邊緣格：路和水就會筆直延伸出去。
+   * 舊的地圖檔路只鋪到最外圈的內側，所以邊緣是草、內側一格是路時，也算路。 */
+  function edgeGround(c, r) {
+    const e = map.ground[clamp(r, 0, rows - 1)][clamp(c, 0, cols - 1)];
+    if (extends_(e)) return e;
+    const i = map.ground[clamp(r, 1, rows - 2)][clamp(c, 1, cols - 2)];
+    return extends_(i) ? i : null;
+  }
+
+  function wildGrass(c, r) {
+    const v = cellHash(c, r, 1);
+    const pool = v < 0.76 ? null : (v < 0.95 ? GRASS.TUFT : GRASS.FLOWER);
+    const src = pool ? pool[Math.floor(cellHash(c, r, 2) * pool.length)] : GRASS.PLAIN;
+    return { sheet: 'grass', src: [src[0], src[1]] };
+  }
+
+  const ground = [];
+  const open = [];   // 郊外可以種東西的格子（不是路、不是水）
+  for (let vy = 0; vy < vr; vy++) {
+    const row = [], orow = [];
+    for (let vx = 0; vx < vc; vx++) {
+      const c = vx - padC, r = vy - padR;
+      const inside = c >= 0 && r >= 0 && c < cols && r < rows;
+      // 地圖裡面照實畫，編輯器塗什麼就看到什麼
+      const g = inside ? map.ground[r][c] : (edgeGround(c, r) || wildGrass(c, r));
+      row.push(g);
+      orow.push(!inside && !extends_(g));
+    }
+    ground.push(row);
+    open.push(orow);
+  }
+
+  // 真正的地圖物件，平移到畫面座標
+  const objects = map.objects.map((o) => ({ t: o.t, i: o.i, c: o.c + padC, r: o.r + padR }));
+
+  /* 郊外的樹與灌木。位置只跟「相對地圖的格座標」有關，視窗大小變了，
+   * 原本看得到的樹還在原地，只是多露出或少露出一些。
+   * 離地圖至少空一格，樹冠才不會蓋住地圖邊上的貓。 */
+  const freeFor = (c, r, w, h) => {
+    if (c + w > -1 && r + h > -1 && c < cols + 1 && r < rows + 1) return false;  // 碰到地圖或旁邊那一格
+    for (let rr = r; rr < r + h; rr++) {
+      for (let cc = c; cc < c + w; cc++) {
+        const vx = cc + padC, vy = rr + padR;
+        if (vx < 0 || vy < 0 || vx >= vc || vy >= vr) continue;   // 超出畫面的部分不必檢查
+        if (!open[vy][vx]) return false;
+      }
+    }
+    return true;
+  };
+  const B = APRON_BLOCK;
+  const bx0 = Math.floor((-padC - 4) / B), bx1 = Math.floor((cols + padC) / B);
+  const by0 = Math.floor((-padR - 4) / B), by1 = Math.floor((rows + padR) / B);
+  for (let by = by0; by <= by1; by++) {
+    for (let bx = bx0; bx <= bx1; bx++) {
+      const roll = cellHash(bx, by, 3);
+      if (roll > 0.88) continue;
+      const t = roll < 0.7 ? 'tree' : (roll < 0.8 ? 'bushL' : 'bush');
+      const list = OBJECT_LISTS[t];
+      const i = Math.floor(cellHash(bx, by, 4) * list.length);
+      const it = list[i];
+      const c = bx * B + Math.floor(cellHash(bx, by, 5) * (B - 1));
+      const r = by * B + Math.floor(cellHash(bx, by, 6) * (B - 1));
+      if (c + it.w <= -padC || r + it.h <= -padR || c >= cols + padC || r >= rows + padR) continue;
+      if (!freeFor(c, r, it.w, it.h)) continue;
+      objects.push({ t, i, c: c + padC, r: r + padR });
+    }
+  }
+
+  // 零星草叢
+  for (let vy = 0; vy < vr; vy++) {
+    for (let vx = 0; vx < vc; vx++) {
+      if (!open[vy][vx] || cellHash(vx - padC, vy - padR, 7) > 0.06) continue;
+      const i = Math.floor(cellHash(vx - padC, vy - padR, 8) * OBJECT_LISTS.weed.length);
+      objects.push({ t: 'weed', i, c: vx, r: vy });
+    }
+  }
+
+  const view = rebuildMap({ cols: vc, rows: vr, ground, objects });
+  view.padC = padC;
+  view.padR = padR;
+  // 最下面那排郊外的樹，錨點（樹根）可能在畫面外，樹冠卻露在畫面裡：要畫到這一列為止
+  view.lastRow = objects.reduce((m, o) => {
+    const it = OBJECT_LISTS[o.t][o.i];
+    return Math.max(m, o.r + ((it && it.h) || 1) - 1);
+  }, vr - 1);
+  return view;
 }
 
 /* ---------------------------------------------------------------------

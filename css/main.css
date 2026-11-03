@@ -11,9 +11,10 @@
  *   #90625d 深色描邊
  *
  * 關鍵設計：畫面分成兩層畫布。
- *   #stage  像素層，尺寸就是地圖原始像素，用 CSS 放大「整數」倍，
- *           配合 image-rendering: pixelated，像素邊緣才會銳利。
- *   #labels UI 層，尺寸等於放大後的螢幕像素，中文字以原生解析度繪製，
+ *   #stage  像素層，地圖加外圍郊外，放大到塞得下的最大尺寸（以螢幕像素計）。
+ *           整數倍時用 image-rendering: pixelated，像素邊緣才會銳利；
+ *           小數倍的做法見 main.js 的 layout()。
+ *   #labels UI 層，蓋住整個畫布區，尺寸等於螢幕像素，中文字以原生解析度繪製，
  *           投影到教室後排才看得清楚。
  * ===================================================================== */
 
@@ -39,28 +40,7 @@ html, body {
   color: var(--ink);
   font-family: "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", system-ui, sans-serif;
   overflow: hidden;
-  background: #2f4a1c;
-}
-
-/* ---------------- 模糊草地背景 ----------------
-   直接拿地圖用的草地圖塊放大再模糊，畫布外的區域就跟草地同一個色系，
-   不會再是一片與綠色地圖打架的深黑。 */
-#bg {
-  position: fixed;
-  inset: -60px;                 /* 往外撐開，避免模糊把邊緣吃掉露出底色 */
-  z-index: -1;
-  background-image: url("../assets/Pixel%20Art%20Top%20Down%20-%20Basic%20v1.2.3/Texture/TX%20Tileset%20Grass.png");
-  background-repeat: repeat;
-  background-size: 512px 512px;
-  filter: blur(26px) saturate(0.85) brightness(0.62);
-}
-
-/* 中央壓暗一點，讓地圖本身跳出來 */
-#bg::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.18) 0%, rgba(0, 0, 0, 0.52) 100%);
+  background: #4f5a1a;          /* 地面畫出來之前的底色，接近草地 */
 }
 
 #app {
@@ -197,32 +177,30 @@ html, body {
 #stage-wrap {
   flex: 1 1 auto;
   position: relative;
-  display: grid;
-  place-items: center;
   width: 100%;
   min-height: 0;
+  overflow: hidden;    /* 畫面比視窗大一點點（補滿整格），多的裁掉 */
 }
 
-#stage,
-#labels {
-  grid-area: 1 / 1;
-}
-
-/* 地圖外圍一圈木框，讓小鎮看起來像一塊擺在桌上的地圖 */
+/* 位置與尺寸由 main.js 的 layout() 決定：地圖置中，外圍補上郊外鋪滿視窗 */
 #stage {
+  position: absolute;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
-  border: 4px solid var(--line);
-  border-radius: 4px;
-  box-shadow: 0 0 0 3px var(--mid), 0 10px 28px rgba(0, 0, 0, 0.45);
   cursor: default;
 }
+
+/* 不是整數倍時改平滑縮放：畫布已經先用最近鄰放大過，這裡只做最後一點縮放 */
+#stage.smooth { image-rendering: auto; }
 
 #stage.on-cat { cursor: pointer; }
 
 #labels {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
-  border: 4px solid transparent;   /* 與 #stage 的框對齊，兩層才不會偏移 */
 }
 
 /* ---------------- 錯誤橫幅 ---------------- */

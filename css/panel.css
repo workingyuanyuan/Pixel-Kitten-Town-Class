@@ -28,6 +28,17 @@
 #panel.open { transform: translateX(0); }
 #panel[hidden] { display: none; }
 
+/* 點的貓在畫面右邊、會被面板蓋住時，面板改從左邊滑出（main.js 決定） */
+#panel.left {
+  right: auto;
+  left: 0;
+  border-left: none;
+  border-right: 4px solid var(--line);
+  box-shadow: inset -3px 0 0 var(--cream), 14px 0 34px rgba(0, 0, 0, 0.42);
+  transform: translateX(-100%);
+}
+#panel.left.open { transform: translateX(0); }
+
 #panel-close {
   position: absolute;
   top: 12px;

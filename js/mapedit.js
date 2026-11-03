@@ -165,9 +165,7 @@ function objectAtCell(map, c, r) {
 }
 
 function cellFromEvent(e) {
-  const rect = S.stage.getBoundingClientRect();
-  const x = (e.clientX - rect.left) / rect.width * S.stage.width;
-  const y = (e.clientY - rect.top) / rect.height * S.stage.height;
+  const { x, y } = toMapCoords(e.clientX, e.clientY);   // 已扣掉外圍的郊外
   return { c: Math.floor(x / TILE_SIZE), r: Math.floor(y / TILE_SIZE) };
 }
 
@@ -283,8 +281,16 @@ function drawEditorOverlay(lctx, scale) {
   for (let r = 0; r <= S.map.rows; r++) { lctx.moveTo(0, r * T); lctx.lineTo(S.map.cols * T, r * T); }
   lctx.stroke();
 
-  // 游標所在格 + 將要放置的範圍
-  if (ED.hoverCell) {
+  // 地圖的邊界：外面那圈郊外只是背景，改不到也不會存檔
+  lctx.strokeStyle = 'rgba(255, 214, 102, 0.75)';
+  lctx.lineWidth = 2;
+  lctx.setLineDash([10, 6]);
+  lctx.strokeRect(-1, -1, S.map.cols * T + 2, S.map.rows * T + 2);
+  lctx.setLineDash([]);
+
+  // 游標所在格 + 將要放置的範圍（郊外改不到，就不畫）
+  const hc = ED.hoverCell;
+  if (hc && hc.c >= 0 && hc.r >= 0 && hc.c < S.map.cols && hc.r < S.map.rows) {
     let w = 1, h = 1;
     if (ED.tool === 'place') {
       const it = OBJECT_LISTS[ED.kind] && OBJECT_LISTS[ED.kind][ED.index];

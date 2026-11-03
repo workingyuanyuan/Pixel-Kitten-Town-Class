@@ -333,16 +333,16 @@ function drawCatsInRow(ctx, cats, bundle, row) {
  *
  * 名字、進度條、等級都畫在這一層。這一層是原生解析度、不做像素放大，
  * 所以中文字在投影機上才看得清楚。
- * scale 是像素層的放大倍率。
+ * scale 是像素層的放大倍率；uiMin 是字級倍率的下限（螢幕像素）。
  * ------------------------------------------------------------------- */
-function drawCatLabels(lctx, cats, scale) {
+function drawCatLabels(lctx, cats, scale, uiMin = 2) {
   /* 【重要】字級與進度條大小不跟著地圖縮放走。
    *
    * 標籤畫在原生解析度的那一層畫布上，如果字級乘上地圖倍率，地圖一放大
    * （倍率 1x）中文字就會縮到 9px，投影到教室後排完全看不見。
    * 地圖可以縮小換取更大的場景，但名字必須始終看得清楚 —— 那是這個
    * 工具存在的理由。 */
-  const ui = Math.max(2, scale);
+  const ui = Math.max(uiMin, scale);
   const nameSize = Math.round(9 * ui);
   const lvSize = Math.round(6.5 * ui);
   const barW = 22 * ui;

@@ -6,13 +6,22 @@
  * ===================================================================== */
 
 const S = {
-  stage: null, sctx: null,
+  stage: null, pctx: null,   // 畫面上看得到的畫布
+  scene: null, sctx: null,   // 實際作畫的畫布，原始像素；每一格最後放大貼到 stage
   labels: null, lctx: null,
   bundle: null,
   map: null,
   cats: [],
   scale: 2,
+  dpr: 1,
   lastT: 0,
+
+  // 畫面 = 地圖加外圍的郊外（layout() 裡用 composeView 組出來）
+  view: null,
+  viewOf: null,                 // 組這個畫面時地圖的 overlays，地圖一改就會換掉
+  wrapDev: null,                // 畫布區的螢幕像素尺寸
+  origin: { x: 0, y: 0 },       // 地圖左上角在畫面像素層的位置
+  labelOrigin: { x: 0, y: 0 },  // 地圖左上角在 UI 層的位置（螢幕像素）
 
   // 點貓開面板一律可用。加分仍然要在面板上再按一次，
   // 所以誤觸最多只是開了一個面板，不會改到分數。
@@ -96,34 +105,126 @@ function currentClassId() {
 }
 
 /* ---------------------------------------------------------------------
- * 縮放：取「塞得下」的最大整數倍率。小數倍率會讓像素糊掉。
+ * 版面：地圖整張塞進視窗，多出來的地方補上郊外（composeView），畫面不留白
+ *
+ * 倍率以「螢幕實際像素」計算，不是 CSS 像素。Windows 顯示比例 125%、
+ * 瀏覽器放大縮小時，CSS 的 1px 不等於螢幕的 1 像素。
+ *
+ * 地圖放到塞得下的最大尺寸（CONFIG.PIXEL_PERFECT 時只取整數倍）：
+ *   整數倍：直接用 pixelated 放大，像素銳利。
+ *   小數倍：先用最近鄰放大到「大一號的整數倍」，再平滑縮到剛好的尺寸。
+ *           直接用最近鄰縮放小數倍的話，像素會一格寬一格窄，草地的細節會閃；
+ *           這樣做每個像素一樣大，只有邊緣柔一個螢幕像素。
+ *   塞不下（視窗比地圖還小）：平滑縮小，免得整排像素消失。
+ * 地圖本體永遠完整在畫面內，貓和名字不會被切掉；被裁掉的只有郊外。
  * ------------------------------------------------------------------- */
-function computeScale() {
+/* 名字要多少空間（螢幕像素）。
+ * 地圖最外圈永遠不能走，貓最靠邊也在第二圈，所以名字可以先佔用最外圈那一格；
+ * 不夠的部分才要在地圖外另外留。名字畫在貓頭上，從格子上緣往上大約 19 個 ui 高，
+ * 左右各大約 44 個 ui 寬（含小老師星號、座號、四字姓名、等級；ui 見 cats.js 的 drawCatLabels）。 */
+function labelRoom(s, dpr) {
+  const ui = Math.max(2 * dpr, s);
+  return {
+    x: Math.max(0, 44 * ui - 1.5 * TILE_SIZE * s),
+    y: Math.max(0, 19 * ui - TILE_SIZE * s),
+  };
+}
+
+/* 留下名字的空間之後，地圖最大能放大幾倍。放得越大、要留的越少，所以用二分搜尋。 */
+function largestFit(dev, mapW, mapH) {
+  const ok = (s) => {
+    const room = labelRoom(s, dev.dpr);
+    return mapW * s + 2 * room.x <= dev.w && mapH * s + 2 * room.y <= dev.h;
+  };
+  let lo = 0.001, hi = Math.min(dev.w / mapW, dev.h / mapH);
+  if (ok(hi)) return hi;
+  // 視窗小到連名字的空間都留不下：至少讓整張地圖塞得下，名字切掉一點也沒辦法
+  if (!ok(lo)) return hi;
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    if (ok(mid)) lo = mid; else hi = mid;
+  }
+  return lo;
+}
+
+function wrapDeviceSize() {
   const wrap = document.getElementById('stage-wrap');
-  const mapW = CONFIG.MAP_COLS * TILE_SIZE;
-  const mapH = CONFIG.MAP_ROWS * TILE_SIZE;
-  const s = Math.min(Math.floor(wrap.clientWidth / mapW), Math.floor(wrap.clientHeight / mapH));
-  return Math.max(1, s);
+  const dpr = window.devicePixelRatio || 1;
+  // ResizeObserver 給的是精確的螢幕像素；還沒收到之前用 CSS 尺寸換算
+  if (S.wrapDev && S.wrapDev.dpr === dpr) return S.wrapDev;
+  return { w: Math.round(wrap.clientWidth * dpr), h: Math.round(wrap.clientHeight * dpr), dpr };
 }
 
 function layout() {
-  const mapW = CONFIG.MAP_COLS * TILE_SIZE;
-  const mapH = CONFIG.MAP_ROWS * TILE_SIZE;
-  S.scale = computeScale();
+  if (!S.map) return;
+  const T = TILE_SIZE;
+  const mapW = S.map.cols * T, mapH = S.map.rows * T;
+  const dev = wrapDeviceSize();
+  // 地圖碰到視窗邊緣時，邊上那幾隻貓的名字會被切掉（名字畫在貓的上方、比貓寬），
+  // 所以四周要留一點空間，留下來的地方一樣是郊外
+  const fit = largestFit(dev, mapW, mapH);
+  let s, k;   // s：地圖 1 像素 = 螢幕幾像素；k：先用最近鄰放大幾倍
+  if (fit < 1) {
+    s = Math.max(0.001, fit); k = 1;
+  } else {
+    const n = Math.floor(fit);
+    // 離整數倍很近就乾脆用整數倍，少一點點尺寸換銳利
+    s = (CONFIG.PIXEL_PERFECT || fit / n < 1.08) ? n : fit;
+    k = s === n ? 1 : Math.ceil(s);
+  }
+  S.scale = s;
+  S.dpr = dev.dpr;
 
-  // 像素層：內部解析度 = 地圖原始像素，CSS 尺寸 = 整數倍放大
-  S.stage.width = mapW;
-  S.stage.height = mapH;
-  S.stage.style.width = (mapW * S.scale) + 'px';
-  S.stage.style.height = (mapH * S.scale) + 'px';
+  // 畫面要涵蓋整個視窗：左右、上下各補幾格郊外（地圖置中，兩邊一樣多）
+  const padC = Math.max(0, Math.ceil((dev.w / s - mapW) / 2 / T));
+  const padR = Math.max(0, Math.ceil((dev.h / s - mapH) / 2 / T));
+  S.view = composeView(S.map, padC, padR);
+  S.viewOf = S.map.overlays;
+  S.origin = { x: padC * T, y: padR * T };
 
-  // UI 層：內部解析度就是螢幕像素，字才會清楚
-  S.labels.width = mapW * S.scale;
-  S.labels.height = mapH * S.scale;
-  S.labels.style.width = (mapW * S.scale) + 'px';
-  S.labels.style.height = (mapH * S.scale) + 'px';
+  // 作畫用的畫布 = 畫面（地圖加郊外）的原始像素；看得到的畫布 = 再放大 k 倍。
+  // 顯示時放大成 s 倍並置中，超出視窗的部分裁掉
+  const vw = S.view.cols * T, vh = S.view.rows * T;
+  if (S.scene.width !== vw) S.scene.width = vw;
+  if (S.scene.height !== vh) S.scene.height = vh;
+  if (S.stage.width !== vw * k) S.stage.width = vw * k;
+  if (S.stage.height !== vh * k) S.stage.height = vh * k;
+  const left = Math.round((dev.w - vw * s) / 2), top = Math.round((dev.h - vh * s) / 2);
+  S.stage.style.width = (vw * s / dev.dpr) + 'px';
+  S.stage.style.height = (vh * s / dev.dpr) + 'px';
+  S.stage.style.left = (left / dev.dpr) + 'px';
+  S.stage.style.top = (top / dev.dpr) + 'px';
+  S.stage.classList.toggle('smooth', s !== Math.floor(s));
+
+  // UI 層：剛好蓋住整個視窗，內部解析度就是螢幕像素，字才會清楚
+  if (S.labels.width !== dev.w) S.labels.width = dev.w;
+  if (S.labels.height !== dev.h) S.labels.height = dev.h;
+  S.labelOrigin = { x: left + S.origin.x * s, y: top + S.origin.y * s };
 
   S.sctx.imageSmoothingEnabled = false;
+  S.pctx.imageSmoothingEnabled = false;
+}
+
+/* 拖曳視窗邊框時 resize 會連發，等停下來再重排：郊外的地面要重畫，不便宜 */
+let layoutTimer = null;
+function scheduleLayout() {
+  if (layoutTimer) clearTimeout(layoutTimer);
+  layoutTimer = setTimeout(() => { layoutTimer = null; layout(); }, 120);
+}
+
+function watchStageSize() {
+  const wrap = document.getElementById('stage-wrap');
+  if (typeof ResizeObserver !== 'function') return;
+  const ro = new ResizeObserver((entries) => {
+    const e = entries[0];
+    const box = e.devicePixelContentBoxSize && e.devicePixelContentBoxSize[0];
+    const dpr = window.devicePixelRatio || 1;
+    S.wrapDev = box
+      ? { w: box.inlineSize, h: box.blockSize, dpr }
+      : { w: Math.round(e.contentRect.width * dpr), h: Math.round(e.contentRect.height * dpr), dpr };
+    scheduleLayout();
+  });
+  try { ro.observe(wrap, { box: 'device-pixel-content-box' }); } catch (_) { ro.observe(wrap); }
 }
 
 /* ---------------------------------------------------------------------
@@ -429,12 +530,21 @@ function hideToast() {
   document.getElementById('toast').hidden = true;
 }
 
-/* 螢幕座標 -> 地圖內部像素座標 */
+/* 面板平常從右邊滑出；點的貓在右邊、會被面板蓋住時改從左邊，
+ * 老師才看得到那隻貓加分時的動畫。 */
+function placePanelAwayFrom(cat) {
+  const wrap = document.getElementById('stage-wrap').getBoundingClientRect();
+  const x = wrap.left + (S.labelOrigin.x + (cat.x + TILE_SIZE / 2) * S.scale) / S.dpr;
+  const panelW = Math.min(380, window.innerWidth * 0.92);
+  document.getElementById('panel').classList.toggle('left', x > window.innerWidth - panelW - 60);
+}
+
+/* 螢幕座標 -> 地圖內部像素座標（扣掉外圍的郊外，地圖左上角是 0, 0） */
 function toMapCoords(clientX, clientY) {
   const r = S.stage.getBoundingClientRect();
   return {
-    x: (clientX - r.left) / r.width * S.stage.width,
-    y: (clientY - r.top) / r.height * S.stage.height,
+    x: (clientX - r.left) / r.width * S.scene.width - S.origin.x,
+    y: (clientY - r.top) / r.height * S.scene.height - S.origin.y,
   };
 }
 
@@ -588,32 +698,48 @@ function frame(t) {
   updateCats(S.cats, dt, S.map);
   updatePanel(dt);
 
-  const sctx = S.sctx;
-  sctx.clearRect(0, 0, S.stage.width, S.stage.height);
+  // 地圖改過（編輯、換班、重新產生）就重組外圍的郊外
+  if (S.viewOf !== S.map.overlays) layout();
+  const view = S.view;
 
+  const sctx = S.sctx;
+  sctx.clearRect(0, 0, S.scene.width, S.scene.height);
+
+  // 地面、水、光影、天氣畫在整個畫面（地圖加郊外）上
   // 草地與小路是程式畫的（ground.js），不靠素材圖
-  drawProceduralGround(sctx, S.map, S.bundle.tiles);
+  drawProceduralGround(sctx, view, S.bundle.tiles);
   drawGroundLife(sctx);
 
-  drawWater(sctx, S.map, dt);
-  drawFlats(sctx, S.map, S.bundle.tiles);
+  drawWater(sctx, view, dt);
+  drawFlats(sctx, view, S.bundle.tiles);
 
   // 天氣與光影只落在地面上，要在植物與貓之前畫
-  weatherGround(sctx, S.map, dt);
-  ambienceGround(sctx, S.map, S.bundle.tiles, dt);
+  weatherGround(sctx, view, dt);
+  ambienceGround(sctx, view, S.bundle.tiles, dt);
 
-  // 逐列交錯繪製植物與貓，讓前後遮擋正確
-  for (let row = 0; row < S.map.rows; row++) {
-    if (S.bundle.tiles.plant) drawOverlay(sctx, S.map, S.bundle.tiles, row);
-    drawCatsInRow(sctx, S.cats, S.bundle, row);
+  // 逐列交錯繪製植物與貓，讓前後遮擋正確。貓用的是地圖座標，要平移到畫面上的位置
+  for (let row = 0; row <= view.lastRow; row++) {
+    if (S.bundle.tiles.plant) drawOverlay(sctx, view, S.bundle.tiles, row);
+    const mapRow = row - view.padR;
+    if (mapRow < 0 || mapRow >= S.map.rows) continue;
+    sctx.save();
+    sctx.translate(S.origin.x, S.origin.y);
+    drawCatsInRow(sctx, S.cats, S.bundle, mapRow);
+    sctx.restore();
   }
 
   ambienceAir(sctx);
   weatherAir(sctx);
 
+  // 貼到看得到的畫布：k 倍時用最近鄰放大，像素才不會糊
+  S.pctx.drawImage(S.scene, 0, 0, S.stage.width, S.stage.height);
+
   const lctx = S.lctx;
+  lctx.setTransform(1, 0, 0, 1, 0, 0);
   lctx.clearRect(0, 0, S.labels.width, S.labels.height);
-  drawCatLabels(lctx, S.cats, S.scale);
+  lctx.translate(S.labelOrigin.x, S.labelOrigin.y);
+  // 字級至少是 CSS 的兩倍像素：瀏覽器放大時名字跟著變大，像素畫則維持銳利
+  drawCatLabels(lctx, S.cats, S.scale, 2 * S.dpr);
   drawEditorOverlay(lctx, S.scale);
 
   requestAnimationFrame(frame);
@@ -624,7 +750,9 @@ function frame(t) {
  * ------------------------------------------------------------------- */
 async function boot() {
   S.stage = document.getElementById('stage');
-  S.sctx = S.stage.getContext('2d');
+  S.pctx = S.stage.getContext('2d');
+  S.scene = document.createElement('canvas');
+  S.sctx = S.scene.getContext('2d');
   S.labels = document.getElementById('labels');
   S.lctx = S.labels.getContext('2d');
 
@@ -645,6 +773,7 @@ async function boot() {
   S.bundle = await loadAllAssets();
   S.map = generateMap(CONFIG.MAP_SEED, CONFIG.MAP_COLS, CONFIG.MAP_ROWS);
   layout();
+  watchStageSize();
   initMapEdit({
     onChange: () => { S.mapDirty = true; rebuildCats(); setSaveState('地圖未存檔…'); },
     onSave: () => saveMap(),
@@ -810,7 +939,7 @@ function wireControls() {
     if (mapEditActive()) return;        // 編輯模式由 pointerdown 處理
     const { x, y } = toMapCoords(e.clientX, e.clientY);
     const hit = catAt(S.cats, x, y);
-    if (hit) openPanel(hit);
+    if (hit) { placePanelAwayFrom(hit); openPanel(hit); }
     else closePanel();   // 點空白處關閉
   });
 
@@ -855,7 +984,7 @@ function wireControls() {
     }
   });
 
-  window.addEventListener('resize', () => { layout(); refreshControls(); });
+  window.addEventListener('resize', () => { scheduleLayout(); refreshControls(); });
   window.addEventListener('pagehide', flushOnExit);
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') flushOnExit();

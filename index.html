@@ -10,9 +10,6 @@
 </head>
 <body>
 
-<!-- 模糊化的草地背景，取自地圖素材本身，讓畫布之外不再是一片死黑 -->
-<div id="bg"></div>
-
 <div id="app">
 
   <header id="toolbar">
@@ -38,7 +35,7 @@
   </header>
 
   <!-- 雙層畫布：
-       #stage  像素層，原生地圖解析度，用 CSS 整數倍放大，image-rendering: pixelated
+       #stage  像素層，地圖加外圍郊外，放大到塞得下的最大尺寸（見 main.js 的 layout）
        #labels UI 層，原生螢幕解析度，畫名字與進度條，字體才不會被放大糊掉 -->
   <div id="stage-wrap">
     <canvas id="stage"></canvas>
